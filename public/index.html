@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhiskeySocket Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://unpkg.com/qrcode/build/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --accent: #06b6d4;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --danger: #f43f5e;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      background: radial-gradient(circle at 10% 20%, #0b1225 0, #0f172a 40%, #0b1225 75%);
+      color: var(--text);
+    }
+    h1 { margin: 0 0 16px; letter-spacing: -0.03em; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+    .card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    label { display: block; margin-bottom: 8px; font-weight: 600; }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 15px;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    button {
+      cursor: pointer;
+      border: none;
+      background: var(--accent);
+      color: #0b1225;
+      font-weight: 700;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(6, 182, 212, 0.3); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 999px; display: inline-block; margin-right: 8px;
+      background: var(--muted);
+    }
+    .status-dot.connected { background: var(--success); }
+    .status-dot.qr { background: var(--accent); }
+    .status-dot.disconnected { background: var(--danger); }
+    .qr-box {
+      display: grid; place-items: center;
+      background: rgba(255,255,255,0.04);
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 12px;
+      min-height: 240px;
+      padding: 12px;
+    }
+    #qrCanvas { width: 100%; max-width: 260px; }
+    .log { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>WhiskeySocket Dashboard</h1>
+  <div class="grid">
+    <div class="card">
+      <h3>Status</h3>
+      <div id="statusLine">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Waiting...</span>
+      </div>
+      <div style="margin-top:12px;">
+        <span class="pill" id="userId">User: -</span>
+      </div>
+      <div class="qr-box" style="margin-top:16px;">
+        <canvas id="qrCanvas"></canvas>
+        <div id="qrPlaceholder" style="color:var(--muted);">QR will appear when needed</div>
+      </div>
+      <button id="logoutBtn" style="margin-top:12px; background: var(--danger); color: #fff;">Logout</button>
+    </div>
+
+    <div class="card">
+      <h3>Send Message</h3>
+      <form id="sendForm">
+        <label>Phone (include country code, digits only)</label>
+        <input id="sendNumber" placeholder="62812xxxxxxx" required />
+        <label style="margin-top:10px;">Message</label>
+        <textarea id="sendMessage" placeholder="Type a message..." required></textarea>
+        <button type="submit" style="margin-top:12px;">Send</button>
+      </form>
+      <div class="log" id="sendResult" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h3>Broadcast</h3>
+      <form id="broadcastForm">
+        <label>Phone numbers (one per line)</label>
+        <textarea id="broadcastNumbers" placeholder="62812...\n62813..."></textarea>
+        <label style="margin-top:10px;">Message</label>
+        <textarea id="broadcastMessage" placeholder="Type a message..." required></textarea>
+        <button type="submit" style="margin-top:12px;">Send Broadcast</button>
+      </form>
+      <div class="log" id="broadcastResult" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const userId = document.getElementById('userId');
+    const qrCanvas = document.getElementById('qrCanvas');
+    const qrPlaceholder = document.getElementById('qrPlaceholder');
+    let lastQR;
+
+    function setStatus(state, hasQR, user) {
+      const map = {
+        open: { text: 'Connected', cls: 'connected' },
+        qr: { text: 'Scan QR to connect', cls: 'qr' },
+        close: { text: 'Disconnected', cls: 'disconnected' },
+        connecting: { text: 'Connecting...', cls: 'qr' },
+        starting: { text: 'Starting...', cls: 'qr' },
+      };
+      const info = map[state] || { text: state || 'Unknown', cls: 'disconnected' };
+      statusDot.className = `status-dot ${info.cls}`;
+      statusText.textContent = info.text;
+      userId.textContent = `User: ${user?.id || '-'}`;
+      if (!hasQR) {
+        qrPlaceholder.style.display = 'block';
+        qrCanvas.style.display = 'none';
+      }
+    }
+
+    function renderQR(qr) {
+      lastQR = qr;
+      qrPlaceholder.style.display = 'none';
+      qrCanvas.style.display = 'block';
+      QRCode.toCanvas(qrCanvas, qr, { width: 240 }, (err) => {
+        if (err) console.error(err);
+      });
+    }
+
+    socket.on('qr', (qr) => {
+      setStatus('qr', true);
+      renderQR(qr);
+    });
+
+    socket.on('ready', () => {
+      setStatus('open', false, { id: 'connected' });
+      qrCanvas.style.display = 'none';
+      qrPlaceholder.style.display = 'block';
+    });
+
+    socket.on('close', () => setStatus('close', false));
+
+    socket.on('status', (data) => {
+      setStatus(data.state, data.hasQR, data.user);
+      if (data.hasQR && lastQR) {
+        renderQR(lastQR);
+      }
+    });
+
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    document.getElementById('sendForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const number = document.getElementById('sendNumber').value.trim();
+      const message = document.getElementById('sendMessage').value.trim();
+      const log = document.getElementById('sendResult');
+      log.textContent = 'Sending...';
+      try {
+        const res = await postJson('/send', { number, message });
+        log.textContent = JSON.stringify(res, null, 2);
+      } catch (err) {
+        log.textContent = err.message;
+      }
+    });
+
+    document.getElementById('broadcastForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const numbersRaw = document.getElementById('broadcastNumbers').value.trim();
+      const message = document.getElementById('broadcastMessage').value.trim();
+      const numbers = numbersRaw
+        ? numbersRaw.split(/\r?\n/).map(n => n.trim()).filter(Boolean)
+        : [];
+      const log = document.getElementById('broadcastResult');
+      log.textContent = 'Sending broadcast...';
+      try {
+        const res = await postJson('/broadcast', { numbers, message });
+        log.textContent = JSON.stringify(res, null, 2);
+      } catch (err) {
+        log.textContent = err.message;
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      const log = document.getElementById('sendResult');
+      try {
+        await postJson('/logout', {});
+        setStatus('qr', true);
+        log.textContent = 'Logged out. Scan the new QR.';
+      } catch (err) {
+        log.textContent = err.message;
+      }
+    });
+
+    // Pull initial status
+    fetch('/status').then(r => r.json()).then(data => setStatus(data.state, data.hasQR, data.user)).catch(() => {});
+  </script>
+</body>
+</html>
