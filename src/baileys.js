@@ -8,13 +8,20 @@ function getBaileys() {
   return baileysPromise;
 }
 
-async function startWA(io, { onSockUpdate, onStatusChange } = {}) {
+async function startWA({
+  io,
+  sessionId = "default",
+  authPath = "./auth",
+  onSockUpdate,
+  onStatusChange,
+  onQR,
+} = {}) {
   const {
     default: makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
   } = await getBaileys();
-  const { state, saveCreds } = await useMultiFileAuthState("./auth");
+  const { state, saveCreds } = await useMultiFileAuthState(authPath);
   let sock;
 
   const startSock = () => {
@@ -32,17 +39,18 @@ async function startWA(io, { onSockUpdate, onStatusChange } = {}) {
 
       if (qr) {
         qrcode.generate(qr, { small: true });
-        io.emit("qr", qr);
+        io.emit("qr", { sessionId, qr });
+        if (onQR) onQR(qr);
         if (onStatusChange) onStatusChange({ state: "qr", hasQR: true });
       }
 
       if (connection === "open") {
-        io.emit("ready", "WhatsApp connected!");
+        io.emit("ready", { sessionId, message: "WhatsApp connected!" });
         if (onStatusChange) onStatusChange({ state: "open", hasQR: false });
       }
 
       if (connection === "close") {
-        io.emit("close", "WhatsApp disconnected!");
+        io.emit("close", { sessionId, message: "WhatsApp disconnected!" });
         if (onStatusChange) onStatusChange({ state: "close", hasQR: false });
 
         const statusCode = lastDisconnect?.error?.output?.statusCode;

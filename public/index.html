@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
   <script src="/socket.io/socket.io.js"></script>
-  <script src="https://unpkg.com/qrcode/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -37,7 +37,7 @@
       box-shadow: 0 20px 50px rgba(0,0,0,0.35);
     }
     label { display: block; margin-bottom: 8px; font-weight: 600; }
-    input, textarea, button {
+    input, textarea, button, select {
       width: 100%;
       padding: 10px 12px;
       border-radius: 10px;
@@ -89,12 +89,24 @@
   <h1>WhiskeySocket Dashboard</h1>
   <div class="grid">
     <div class="card">
+      <h3>Sessions</h3>
+      <label>Active session</label>
+      <select id="sessionSelect" style="margin-bottom:12px;"></select>
+      <div class="row" style="margin-bottom:8px;">
+        <input id="newSessionId" placeholder="new-session" />
+        <button id="createSessionBtn" style="width:auto;">Add Session</button>
+      </div>
+      <div class="log" id="sessionLog"></div>
+    </div>
+
+    <div class="card">
       <h3>Status</h3>
       <div id="statusLine">
         <span class="status-dot" id="statusDot"></span>
         <span id="statusText">Waiting...</span>
       </div>
       <div style="margin-top:12px;">
+        <span class="pill" id="sessionLabel">Session: -</span>
         <span class="pill" id="userId">User: -</span>
       </div>
       <div class="qr-box" style="margin-top:16px;">
@@ -131,12 +143,17 @@
 
   <script>
     const socket = io();
+    const sessionSelect = document.getElementById('sessionSelect');
+    const sessionLog = document.getElementById('sessionLog');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
+    const sessionLabel = document.getElementById('sessionLabel');
     const userId = document.getElementById('userId');
     const qrCanvas = document.getElementById('qrCanvas');
     const qrPlaceholder = document.getElementById('qrPlaceholder');
-    let lastQR;
+    const sessions = {};
+    const qrMap = {};
+    let activeSession = null;
 
     function setStatus(state, hasQR, user) {
       const map = {
@@ -149,6 +166,7 @@
       const info = map[state] || { text: state || 'Unknown', cls: 'disconnected' };
       statusDot.className = `status-dot ${info.cls}`;
       statusText.textContent = info.text;
+      sessionLabel.textContent = `Session: ${activeSession || '-'}`;
       userId.textContent = `User: ${user?.id || '-'}`;
       if (!hasQR) {
         qrPlaceholder.style.display = 'block';
@@ -157,33 +175,12 @@
     }
 
     function renderQR(qr) {
-      lastQR = qr;
       qrPlaceholder.style.display = 'none';
       qrCanvas.style.display = 'block';
       QRCode.toCanvas(qrCanvas, qr, { width: 240 }, (err) => {
         if (err) console.error(err);
       });
     }
-
-    socket.on('qr', (qr) => {
-      setStatus('qr', true);
-      renderQR(qr);
-    });
-
-    socket.on('ready', () => {
-      setStatus('open', false, { id: 'connected' });
-      qrCanvas.style.display = 'none';
-      qrPlaceholder.style.display = 'block';
-    });
-
-    socket.on('close', () => setStatus('close', false));
-
-    socket.on('status', (data) => {
-      setStatus(data.state, data.hasQR, data.user);
-      if (data.hasQR && lastQR) {
-        renderQR(lastQR);
-      }
-    });
 
     async function postJson(url, body) {
       const res = await fetch(url, {
@@ -196,6 +193,52 @@
       return data;
     }
 
+    function ensureActiveSession() {
+      if (!activeSession) throw new Error('No active session selected');
+    }
+
+    function upsertSessionOption(id) {
+      if ([...sessionSelect.options].some(o => o.value === id)) return;
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      sessionSelect.appendChild(opt);
+    }
+
+    function applyStatus(sessionId) {
+      if (!sessionId || sessionId !== activeSession) return;
+      const state = sessions[sessionId] || {};
+      setStatus(state.state, state.hasQR, state.user);
+      const qr = qrMap[sessionId];
+      if (state.hasQR && qr) {
+        renderQR(qr);
+      } else if (!state.hasQR) {
+        qrPlaceholder.style.display = 'block';
+        qrCanvas.style.display = 'none';
+      }
+    }
+
+    function setActiveSession(sessionId) {
+      activeSession = sessionId;
+      sessionSelect.value = sessionId;
+      applyStatus(sessionId);
+    }
+
+    socket.on('qr', ({ sessionId, qr }) => {
+      qrMap[sessionId] = qr;
+      sessions[sessionId] = { ...(sessions[sessionId] || {}), hasQR: true };
+      if (!activeSession) setActiveSession(sessionId);
+      applyStatus(sessionId);
+    });
+
+    socket.on('status', (data) => {
+      const { sessionId, ...rest } = data;
+      sessions[sessionId] = { ...(sessions[sessionId] || {}), ...rest };
+      upsertSessionOption(sessionId);
+      if (!activeSession) setActiveSession(sessionId);
+      applyStatus(sessionId);
+    });
+
     document.getElementById('sendForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const number = document.getElementById('sendNumber').value.trim();
@@ -203,7 +246,8 @@
       const log = document.getElementById('sendResult');
       log.textContent = 'Sending...';
       try {
-        const res = await postJson('/send', { number, message });
+        ensureActiveSession();
+        const res = await postJson(`/sessions/${activeSession}/send`, { number, message });
         log.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
         log.textContent = err.message;
@@ -220,7 +264,8 @@
       const log = document.getElementById('broadcastResult');
       log.textContent = 'Sending broadcast...';
       try {
-        const res = await postJson('/broadcast', { numbers, message });
+        ensureActiveSession();
+        const res = await postJson(`/sessions/${activeSession}/broadcast`, { numbers, message });
         log.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
         log.textContent = err.message;
@@ -230,16 +275,49 @@
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       const log = document.getElementById('sendResult');
       try {
-        await postJson('/logout', {});
-        setStatus('qr', true);
+        ensureActiveSession();
+        await postJson(`/sessions/${activeSession}/logout`, {});
+        qrMap[activeSession] = null;
         log.textContent = 'Logged out. Scan the new QR.';
       } catch (err) {
         log.textContent = err.message;
       }
     });
 
-    // Pull initial status
-    fetch('/status').then(r => r.json()).then(data => setStatus(data.state, data.hasQR, data.user)).catch(() => {});
+    document.getElementById('createSessionBtn').addEventListener('click', async () => {
+      const val = document.getElementById('newSessionId').value.trim();
+      if (!val) {
+        sessionLog.textContent = 'Session id required';
+        return;
+      }
+      sessionLog.textContent = 'Creating session...';
+      try {
+        await postJson('/sessions', { id: val });
+        upsertSessionOption(val);
+        setActiveSession(val);
+        sessionLog.textContent = 'Session created, waiting for QR...';
+      } catch (err) {
+        sessionLog.textContent = err.message;
+      }
+    });
+
+    sessionSelect.addEventListener('change', (e) => {
+      setActiveSession(e.target.value);
+    });
+
+    // Pull initial sessions list
+    fetch('/sessions')
+      .then(r => r.json())
+      .then(data => {
+        (data.sessions || []).forEach(s => {
+          sessions[s.id] = { state: s.state, hasQR: s.hasQR, user: s.user };
+          upsertSessionOption(s.id);
+        });
+        if (data.sessions?.length) {
+          setActiveSession(data.sessions[0].id);
+        }
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>

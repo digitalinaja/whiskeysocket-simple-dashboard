@@ -9,9 +9,9 @@ const app = express();
 const server = http.createServer(app);
 const io = initSocket(server);
 
-let sock;
-let waStatus = { state: "starting", hasQR: false };
-const AUTH_DIR = path.join(__dirname, "..", "auth");
+const AUTH_ROOT = path.join(__dirname, "..", "auth");
+const DEFAULT_SESSION_ID = "default";
+const sessions = new Map();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -34,18 +34,115 @@ async function ensureWhatsAppNumber(sock, number) {
   }
 }
 
-app.post("/send", async (req, res) => {
+function getAuthPath(sessionId) {
+  return path.join(AUTH_ROOT, sessionId);
+}
+
+function broadcastStatus(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  const payload = { sessionId, ...session.status, user: session.user };
+  io.emit("status", payload);
+}
+
+async function createSession(sessionId) {
+  if (sessions.has(sessionId)) return sessions.get(sessionId);
+  const authPath = getAuthPath(sessionId);
+  fs.mkdirSync(authPath, { recursive: true });
+
+  const session = {
+    id: sessionId,
+    authPath,
+    sock: null,
+    status: { state: "starting", hasQR: false },
+    user: null,
+    lastQR: null,
+  };
+  sessions.set(sessionId, session);
+
+  session.sock = await startWA({
+    io,
+    sessionId,
+    authPath,
+    onSockUpdate: (newSock) => {
+      session.sock = newSock;
+      session.user = newSock?.user || session.user;
+    },
+    onStatusChange: (status) => {
+      session.status = { ...session.status, ...status };
+      if (status.state === "open" && session.sock) {
+        session.user = session.sock.user || session.user;
+        session.lastQR = null;
+      }
+      broadcastStatus(sessionId);
+    },
+    onQR: (qr) => {
+      session.lastQR = qr;
+      session.status = { ...session.status, hasQR: true };
+      broadcastStatus(sessionId);
+    },
+  });
+
+  broadcastStatus(sessionId);
+  return session;
+}
+
+function getSessionOrError(sessionId, res) {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return null;
+  }
+  return session;
+}
+
+app.get("/sessions", (req, res) => {
+  const list = Array.from(sessions.values()).map((s) => ({
+    id: s.id,
+    state: s.status.state,
+    hasQR: s.status.hasQR,
+    user: s.user,
+  }));
+  res.json({ sessions: list });
+});
+
+app.post("/sessions", async (req, res) => {
+  const { id } = req.body;
+  const sessionId = String(id || "").trim();
+  if (!sessionId) return res.status(400).json({ error: "Session id required" });
+  if (sessions.has(sessionId)) return res.status(400).json({ error: "Session already exists" });
+
+  try {
+    await createSession(sessionId);
+    res.json({ status: "created", sessionId });
+  } catch (err) {
+    console.error("Create session failed", err);
+    res.status(500).json({ error: err?.message || "Failed to create session" });
+  }
+});
+
+app.get("/sessions/:id/status", (req, res) => {
+  const { id } = req.params;
+  const session = sessions.get(id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  res.json({ sessionId: id, ...session.status, user: session.user });
+});
+
+app.post("/sessions/:id/send", async (req, res) => {
+  const { id } = req.params;
+  const session = getSessionOrError(id, res);
+  if (!session) return;
   const { number, message } = req.body;
 
-  if (!sock) return res.status(500).json({ error: "WA not connected" });
-  if (waStatus.state !== "open") return res.status(503).json({ error: "WA not ready" });
+  if (!session.sock) return res.status(500).json({ error: "WA not connected" });
+  if (session.status.state !== "open") return res.status(503).json({ error: "WA not ready" });
   const normalized = normalizeNumber(number);
   if (!normalized) return res.status(400).json({ error: "Invalid number format" });
-  const exists = await ensureWhatsAppNumber(sock, normalized);
+  const exists = await ensureWhatsAppNumber(session.sock, normalized);
   if (!exists) return res.status(400).json({ error: "Number is not on WhatsApp" });
 
   try {
-    await sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: message });
+    await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: message });
     res.json({ status: "sent" });
   } catch (err) {
     console.error("Send failed", err);
@@ -53,10 +150,14 @@ app.post("/send", async (req, res) => {
   }
 });
 
-app.post("/broadcast", async (req, res) => {
+app.post("/sessions/:id/broadcast", async (req, res) => {
+  const { id } = req.params;
+  const session = getSessionOrError(id, res);
+  if (!session) return;
   const { numbers = [], message } = req.body;
-  if (!sock) return res.status(500).json({ error: "WA not connected" });
-  if (waStatus.state !== "open") return res.status(503).json({ error: "WA not ready" });
+  if (!session.sock) return res.status(500).json({ error: "WA not connected" });
+  if (session.status.state !== "open") return res.status(503).json({ error: "WA not ready" });
+
   const results = [];
 
   try {
@@ -67,7 +168,7 @@ app.post("/broadcast", async (req, res) => {
         continue;
       }
 
-      const exists = await ensureWhatsAppNumber(sock, normalized);
+      const exists = await ensureWhatsAppNumber(session.sock, normalized);
       if (!exists) {
         results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp" });
         continue;
@@ -75,7 +176,7 @@ app.post("/broadcast", async (req, res) => {
 
       try {
         await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay between messages
-        await sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: message });
+        await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: message });
         results.push({ number: normalized, status: "sent" });
       } catch (err) {
         console.error("Broadcast send failed", err);
@@ -94,39 +195,29 @@ app.post("/broadcast", async (req, res) => {
   }
 });
 
-app.get("/status", (req, res) => {
-  res.json({
-    state: waStatus.state,
-    hasQR: waStatus.hasQR,
-    user: sock?.user,
-  });
-});
-
-function resetAuthDir() {
+function resetAuthDir(sessionId) {
+  const authPath = getAuthPath(sessionId);
   try {
-    if (fs.existsSync(AUTH_DIR)) {
-      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true });
     }
   } catch (err) {
     console.error("Failed clearing auth dir", err);
   }
 }
 
-app.post("/logout", async (req, res) => {
+app.post("/sessions/:id/logout", async (req, res) => {
+  const { id } = req.params;
+  const session = getSessionOrError(id, res);
+  if (!session) return;
   try {
-    if (sock) {
-      await sock.logout();
+    if (session.sock) {
+      await session.sock.logout();
     }
-    resetAuthDir();
-    sock = await startWA(io, {
-      onSockUpdate: (newSock) => {
-        sock = newSock;
-      },
-      onStatusChange: (status) => {
-        waStatus = { ...waStatus, ...status };
-        io.emit("status", waStatus);
-      },
-    });
+    resetAuthDir(id);
+    // restart session to force new QR
+    sessions.delete(id);
+    await createSession(id);
     res.json({ status: "logged out" });
   } catch (err) {
     console.error("Logout failed", err);
@@ -136,18 +227,14 @@ app.post("/logout", async (req, res) => {
 
 server.listen(3000, async () => {
   console.log("Server running on port 3000");
-
-  sock = await startWA(io, {
-    onSockUpdate: (newSock) => {
-      sock = newSock;
-    },
-    onStatusChange: (status) => {
-      waStatus = { ...waStatus, ...status };
-      io.emit("status", waStatus);
-    },
-  });
+  await createSession(DEFAULT_SESSION_ID);
 });
 
 io.on("connection", (socket) => {
-  socket.emit("status", waStatus);
+  for (const session of sessions.values()) {
+    socket.emit("status", { sessionId: session.id, ...session.status, user: session.user });
+    if (session.lastQR) {
+      socket.emit("qr", { sessionId: session.id, qr: session.lastQR });
+    }
+  }
 });
