@@ -83,6 +83,7 @@
       color: var(--text);
       font-size: 13px;
     }
+    .job-list { max-height: 260px; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -114,6 +115,7 @@
         <div id="qrPlaceholder" style="color:var(--muted);">QR will appear when needed</div>
       </div>
       <button id="logoutBtn" style="margin-top:12px; background: var(--danger); color: #fff;">Logout</button>
+      <button id="deleteSessionBtn" style="margin-top:8px; background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,0.1);">Remove Session</button>
     </div>
 
     <div class="card">
@@ -139,6 +141,11 @@
       </form>
       <div class="log" id="broadcastResult" style="margin-top:8px;"></div>
     </div>
+
+    <div class="card">
+      <h3>Broadcast Jobs</h3>
+      <div class="log job-list" id="jobList">No jobs yet.</div>
+    </div>
   </div>
 
   <script>
@@ -154,6 +161,9 @@
     const sessions = {};
     const qrMap = {};
     let activeSession = null;
+    const jobStates = {};
+    const jobs = {};
+    let currentJobId = null;
 
     function setStatus(state, hasQR, user) {
       const map = {
@@ -205,6 +215,12 @@
       sessionSelect.appendChild(opt);
     }
 
+    function removeSessionOption(id) {
+      const opts = [...sessionSelect.options];
+      const target = opts.find(o => o.value === id);
+      if (target) sessionSelect.removeChild(target);
+    }
+
     function applyStatus(sessionId) {
       if (!sessionId || sessionId !== activeSession) return;
       const state = sessions[sessionId] || {};
@@ -222,6 +238,7 @@
       activeSession = sessionId;
       sessionSelect.value = sessionId;
       applyStatus(sessionId);
+      fetchJobsForSession(sessionId);
     }
 
     socket.on('qr', ({ sessionId, qr }) => {
@@ -262,11 +279,15 @@
         ? numbersRaw.split(/\r?\n/).map(n => n.trim()).filter(Boolean)
         : [];
       const log = document.getElementById('broadcastResult');
-      log.textContent = 'Sending broadcast...';
+      log.textContent = 'Queueing broadcast...';
       try {
         ensureActiveSession();
         const res = await postJson(`/sessions/${activeSession}/broadcast`, { numbers, message });
-        log.textContent = JSON.stringify(res, null, 2);
+        log.textContent = `Job queued: ${res.jobId}`;
+        currentJobId = res.jobId;
+        jobs[res.jobId] = { id: res.jobId, status: 'queued', totals: res.totals || { total: numbers.length } };
+        renderJobList();
+        pollJob(res.jobId, log);
       } catch (err) {
         log.textContent = err.message;
       }
@@ -281,6 +302,21 @@
         log.textContent = 'Logged out. Scan the new QR.';
       } catch (err) {
         log.textContent = err.message;
+      }
+    });
+
+    document.getElementById('deleteSessionBtn').addEventListener('click', async () => {
+      if (!activeSession) {
+        sessionLog.textContent = 'No active session to remove.';
+        return;
+      }
+      sessionLog.textContent = 'Removing session...';
+      try {
+        await fetch(`/sessions/${activeSession}`, { method: 'DELETE' }).then(r => r.json());
+        removeSessionFromState(activeSession);
+        sessionLog.textContent = 'Session removed.';
+      } catch (err) {
+        sessionLog.textContent = err.message || 'Failed to remove session';
       }
     });
 
@@ -303,7 +339,104 @@
 
     sessionSelect.addEventListener('change', (e) => {
       setActiveSession(e.target.value);
+      fetchJobsForSession(e.target.value);
     });
+
+    function fetchJobsForSession(sessionId) {
+      jobsKeysClear();
+      renderJobList();
+      fetch(`/sessions/${sessionId}/broadcast`)
+        .then(r => r.json())
+        .then(data => {
+          (data.jobs || []).forEach((j) => { jobs[j.id] = j; });
+          renderJobList();
+        })
+        .catch(() => {});
+    }
+
+    function jobsKeysClear() {
+      for (const key of Object.keys(jobs)) delete jobs[key];
+    }
+
+    function renderJob(job, targetEl) {
+      const { status, totals = {}, results = [], phase, nextResumeAt, config = {} } = job;
+      const summary = `status: ${status} (${phase || 'running'}), sent: ${totals.sent || 0}, skipped: ${totals.skipped || 0}, failed: ${totals.failed || 0}/${totals.total || 0} | delay ${config.delayMinMs || 0}-${config.delayMaxMs || 0}ms`;
+      const cooldownLine = nextResumeAt ? `cooldown until ${new Date(nextResumeAt).toLocaleTimeString()}` : '';
+      const recent = results.slice(-5);
+      targetEl.textContent = `${summary}${cooldownLine ? ' | ' + cooldownLine : ''}\nRecent:\n${recent.map(r => `${r.number || '-'} -> ${r.status}${r.reason ? ' (' + r.reason + ')' : ''}${r.error ? ' [' + r.error + ']' : ''}`).join('\n')}`;
+    }
+
+    async function pollJob(jobId, logEl) {
+      jobStates[jobId] = 'running';
+      const poll = async () => {
+        try {
+          const res = await fetch(`/sessions/${activeSession}/broadcast/${jobId}`).then(r => r.json());
+          const job = res.job;
+          jobs[job.id] = job;
+          renderJobList();
+          renderJob(job, logEl);
+          if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+            jobStates[jobId] = job.status;
+            return;
+          }
+          setTimeout(poll, 1000);
+        } catch (err) {
+          logEl.textContent = err.message;
+        }
+      };
+      poll();
+    }
+
+    socket.on('broadcastUpdate', ({ sessionId, job }) => {
+      if (sessionId !== activeSession) return;
+      jobs[job.id] = job;
+      renderJobList();
+      if (job.id === currentJobId) {
+        const log = document.getElementById('broadcastResult');
+        renderJob(job, log);
+      }
+    });
+
+    function renderJobList() {
+      const target = document.getElementById('jobList');
+      const list = Object.values(jobs).sort((a, b) => (b.startedAt || b.requestedAt || 0) - (a.startedAt || a.requestedAt || 0));
+      if (!list.length) {
+        target.textContent = 'No jobs yet.';
+        return;
+      }
+      target.textContent = list.map((j) => {
+        const totals = j.totals || { sent: 0, skipped: 0, failed: 0, total: 0 };
+        const phase = j.phase || j.status;
+        const next = j.nextResumeAt ? ` cooldown -> ${new Date(j.nextResumeAt).toLocaleTimeString()}` : '';
+        return `${j.id} | ${j.status} (${phase}) | ${totals.sent}/${totals.total} sent, skipped ${totals.skipped}, failed ${totals.failed}${next}`;
+      }).join('\n');
+    }
+
+    function clearActiveUI() {
+      activeSession = null;
+      sessionLabel.textContent = 'Session: -';
+      userId.textContent = 'User: -';
+      statusText.textContent = 'No session';
+      statusDot.className = 'status-dot disconnected';
+      qrPlaceholder.style.display = 'block';
+      qrCanvas.style.display = 'none';
+      jobsKeysClear();
+      renderJobList();
+    }
+
+    function removeSessionFromState(sessionId) {
+      delete sessions[sessionId];
+      delete qrMap[sessionId];
+      removeSessionOption(sessionId);
+      if (activeSession === sessionId) {
+        const first = sessionSelect.options[0]?.value;
+        if (first) {
+          setActiveSession(first);
+        } else {
+          clearActiveUI();
+        }
+      }
+    }
 
     // Pull initial sessions list
     fetch('/sessions')
@@ -318,6 +451,10 @@
         }
       })
       .catch(() => {});
+
+    socket.on('sessionRemoved', ({ sessionId }) => {
+      removeSessionFromState(sessionId);
+    });
   </script>
 </body>
 </html>
