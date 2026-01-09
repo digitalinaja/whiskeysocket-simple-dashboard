@@ -11,9 +11,15 @@ const server = http.createServer(app);
 const io = initSocket(server);
 
 const AUTH_ROOT = path.join(__dirname, "..", "auth");
+const JOBS_ROOT = path.join(__dirname, "..", "jobs");
 const DEFAULT_SESSION_ID = "default";
 const sessions = new Map();
 const broadcastJobs = new Map();
+
+// Ensure jobs directory exists
+if (!fs.existsSync(JOBS_ROOT)) {
+  fs.mkdirSync(JOBS_ROOT, { recursive: true });
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -131,6 +137,83 @@ function emitBroadcastUpdate(sessionId, job) {
   io.emit("broadcastUpdate", { sessionId, job });
 }
 
+// Save job to JSON file
+function saveJobToFile(job) {
+  try {
+    console.log(`[SAVE JOB] Attempting to save job ${job.id}...`);
+    console.log(`[SAVE JOB] JOBS_ROOT: ${JOBS_ROOT}`);
+    console.log(`[SAVE JOB] Directory exists: ${fs.existsSync(JOBS_ROOT)}`);
+
+    const filename = `${job.id}.json`;
+    const filepath = path.join(JOBS_ROOT, filename);
+
+    // Ensure directory exists
+    if (!fs.existsSync(JOBS_ROOT)) {
+      console.log(`[SAVE JOB] Creating jobs directory...`);
+      fs.mkdirSync(JOBS_ROOT, { recursive: true });
+    }
+
+    const jobJson = JSON.stringify(job, null, 2);
+    console.log(`[SAVE JOB] Job JSON length: ${jobJson.length} chars`);
+
+    fs.writeFileSync(filepath, jobJson);
+    console.log(`[SAVE JOB] ✓ Job saved successfully to: ${filepath}`);
+  } catch (err) {
+    console.error("[SAVE JOB] ✗ Failed to save job to file:", err);
+  }
+}
+
+// Create a tracking job for personalized broadcasts
+function createPersonalizedJob(sessionId, numbers, messageTemplate, csvData) {
+  const id = randomUUID();
+  const job = {
+    id,
+    sessionId,
+    status: "running",
+    requestedAt: Date.now(),
+    startedAt: Date.now(),
+    completedAt: null,
+    totals: { sent: 0, skipped: 0, failed: 0, total: csvData.length },
+    processed: 0,
+    phase: "running",
+    results: [],
+    config: {
+      personalized: true,
+      messageTemplate,
+    },
+    message: messageTemplate,
+    csvData: csvData, // Store original CSV data
+  };
+
+  broadcastJobs.set(id, job);
+  emitBroadcastUpdate(sessionId, job);
+
+  return job;
+}
+
+// Load existing jobs from files
+function loadExistingJobs() {
+  try {
+    const files = fs.readdirSync(JOBS_ROOT);
+    const jobFiles = files.filter(f => f.endsWith('.json'));
+
+    jobFiles.forEach(file => {
+      try {
+        const filepath = path.join(JOBS_ROOT, file);
+        const jobData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+        broadcastJobs.set(jobData.id, jobData);
+        console.log(`Loaded job ${jobData.id}`);
+      } catch (err) {
+        console.error(`Failed to load job from ${file}:`, err);
+      }
+    });
+
+    console.log(`Loaded ${jobFiles.length} jobs from disk`);
+  } catch (err) {
+    console.error("Failed to load existing jobs", err);
+  }
+}
+
 function createBroadcastJob(
   sessionId,
   numbers,
@@ -230,7 +313,9 @@ function createBroadcastJob(
     job.status = "completed";
     job.completedAt = Date.now();
     job.phase = "completed";
+    console.log(`[JOB COMPLETE] Job ${job.id} completed. Sent: ${job.totals.sent}, Failed: ${job.totals.failed}`);
     emitBroadcastUpdate(sessionId, job);
+    saveJobToFile(job); // Auto-save when completed
   };
 
   // kick off async, but don't await inside request
@@ -240,6 +325,7 @@ function createBroadcastJob(
       job.status = "failed";
       job.completedAt = Date.now();
       emitBroadcastUpdate(sessionId, job);
+      saveJobToFile(job); // Also save on failure
     });
   });
 
@@ -346,6 +432,118 @@ app.post("/sessions/:id/broadcast", async (req, res) => {
   });
 });
 
+// Personalized broadcast endpoint
+app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
+  const { id } = req.params;
+  const session = getSessionOrError(id, res);
+  if (!session) return;
+
+  const {
+    csvData = [],
+    messageTemplate,
+    delayMinMs = 3000,
+    delayMaxMs = 8000,
+    cooldownAfter = 30,
+    cooldownMinMs = 120000,
+    cooldownMaxMs = 300000,
+  } = req.body;
+
+  if (!session.sock) return res.status(500).json({ error: "WA not connected" });
+  if (session.status.state !== "open") return res.status(503).json({ error: "WA not ready" });
+  if (!Array.isArray(csvData) || csvData.length === 0) {
+    return res.status(400).json({ error: "csvData array required" });
+  }
+
+  // Create tracking job
+  const job = createPersonalizedJob(id, csvData.map(d => d.phone), messageTemplate, csvData);
+
+  // Send messages asynchronously
+  const runPersonalized = async () => {
+    let sent = 0;
+    let failed = 0;
+
+    for (const contact of csvData) {
+      const personalizedMessage = messageTemplate.replace(/\{name\}/gi, contact.name || '');
+      const normalized = normalizeNumber(contact.phone);
+
+      if (!normalized) {
+        job.results.push({ number: contact.phone, status: "skipped", reason: "invalid number" });
+        job.totals.skipped += 1;
+        job.processed += 1;
+        emitBroadcastUpdate(id, job);
+        continue;
+      }
+
+      const exists = await ensureWhatsAppNumber(session.sock, normalized);
+      if (!exists) {
+        job.results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp" });
+        job.totals.skipped += 1;
+        job.processed += 1;
+        emitBroadcastUpdate(id, job);
+        continue;
+      }
+
+      try {
+        const delay = randomBetween(delayMinMs, delayMaxMs);
+        await sleep(delay);
+        await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: personalizedMessage });
+        job.results.push({ number: normalized, status: "sent", name: contact.name });
+        job.totals.sent += 1;
+        sent++;
+      } catch (err) {
+        console.error("Personalized send failed", err);
+        job.results.push({
+          number: normalized,
+          status: "failed",
+          error: err?.message || "Failed to send",
+          name: contact.name
+        });
+        job.totals.failed += 1;
+        failed++;
+      }
+
+      job.processed += 1;
+      emitBroadcastUpdate(id, job);
+
+      // Cooldown
+      if (job.processed > 0 && job.processed % cooldownAfter === 0) {
+        const wait = randomBetween(cooldownMinMs, cooldownMaxMs);
+        job.phase = "cooldown";
+        job.nextResumeAt = Date.now() + wait;
+        emitBroadcastUpdate(id, job);
+        await sleep(wait);
+        job.phase = "running";
+        job.nextResumeAt = null;
+        emitBroadcastUpdate(id, job);
+      }
+    }
+
+    job.status = "completed";
+    job.completedAt = Date.now();
+    job.phase = "completed";
+    console.log(`[PERSONALIZED JOB COMPLETE] Job ${job.id}. Sent: ${sent}, Failed: ${failed}`);
+    emitBroadcastUpdate(id, job);
+    saveJobToFile(job);
+  };
+
+  setImmediate(() => {
+    runPersonalized().catch((err) => {
+      console.error("Personalized broadcast job crashed", err);
+      job.status = "failed";
+      job.completedAt = Date.now();
+      emitBroadcastUpdate(id, job);
+      saveJobToFile(job);
+    });
+  });
+
+  res.json({
+    status: "queued",
+    jobId: job.id,
+    totals: job.totals,
+    message: "Personalized broadcast started",
+  });
+});
+
 app.get("/sessions/:id/broadcast/:jobId", (req, res) => {
   const { id, jobId } = req.params;
   const job = broadcastJobs.get(jobId);
@@ -360,6 +558,33 @@ app.get("/sessions/:id/broadcast", (req, res) => {
   const jobs = Array.from(broadcastJobs.values())
     .filter((j) => j.sessionId === id)
     .sort((a, b) => (b.startedAt || b.requestedAt) - (a.startedAt || a.requestedAt));
+  res.json({ jobs });
+});
+
+// Get all jobs with optional date filter
+app.get("/jobs", (req, res) => {
+  const { startDate, endDate, limit = 100 } = req.query;
+
+  let jobs = Array.from(broadcastJobs.values());
+
+  // Filter by date range
+  if (startDate) {
+    const start = new Date(startDate).getTime();
+    jobs = jobs.filter(j => (j.completedAt || j.requestedAt) >= start);
+  }
+  if (endDate) {
+    const end = new Date(endDate).getTime();
+    jobs = jobs.filter(j => (j.completedAt || j.requestedAt) <= end);
+  }
+
+  // Sort by date (newest first)
+  jobs.sort((a, b) => (b.completedAt || b.requestedAt) - (a.completedAt || a.requestedAt));
+
+  // Apply limit
+  if (limit) {
+    jobs = jobs.slice(0, parseInt(limit));
+  }
+
   res.json({ jobs });
 });
 
@@ -427,6 +652,7 @@ app.delete("/sessions/:id", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+  loadExistingJobs(); // Load saved jobs from disk
   await loadExistingSessions();
 });
 

@@ -872,16 +872,108 @@
         <p class="page-subtitle">Monitor your broadcast jobs</p>
       </div>
 
-      <div class="session-selector">
-        <label>Filter by Session:</label>
-        <div class="session-selector-row">
-          <select id="jobsSessionSelect"></select>
+      <div class="card">
+        <h3 class="card-title">🔍 Filter Jobs</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label>Filter Type</label>
+            <select id="jobFilterType">
+              <option value="all">All Jobs (All Sessions)</option>
+              <option value="session">Specific Session</option>
+            </select>
+          </div>
+          <div id="jobSessionFilter" style="display: none;">
+            <label>Session</label>
+            <select id="jobsSessionSelect"></select>
+          </div>
+          <div>
+            <label>Start Date</label>
+            <input type="date" id="jobStartDate">
+          </div>
+          <div>
+            <label>End Date</label>
+            <input type="date" id="jobEndDate">
+          </div>
+          <div>
+            <label>Limit</label>
+            <select id="jobLimit">
+              <option value="50">Last 50</option>
+              <option value="100" selected>Last 100</option>
+              <option value="500">Last 500</option>
+              <option value="">All</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button type="button" id="applyJobFilter" class="btn-ghost" style="width: auto;">Apply Filter</button>
+          <button type="button" id="resetJobFilter" class="btn-ghost" style="width: auto;">Reset</button>
+          <button type="button" id="refreshJobs" class="btn-ghost" style="width: auto;">🔄 Refresh</button>
         </div>
       </div>
 
       <div class="card">
-        <h3 class="card-title">📋 Active & Recent Jobs</h3>
+        <h3 class="card-title">📋 Jobs (<span id="jobCount">0</span>)</h3>
         <div class="job-list" id="jobList">No jobs yet.</div>
+      </div>
+    </div>
+
+    <!-- Job Detail View -->
+    <div id="view-job-detail" class="view">
+      <div class="page-header">
+        <h2 class="page-title">Job Detail: <span id="jobDetailId">-</span></h2>
+        <p class="page-subtitle">
+          Status: <span id="jobDetailStatus" class="status-badge">-</span> |
+          Phase: <span id="jobDetailPhase">-</span>
+        </p>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">📊 Job Statistics</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-content">
+              <div class="stat-label">Sent</div>
+              <div class="stat-value" id="jobDetailSent">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⏭️</div>
+            <div class="stat-content">
+              <div class="stat-label">Skipped</div>
+              <div class="stat-value" id="jobDetailSkipped">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">❌</div>
+            <div class="stat-content">
+              <div class="stat-label">Failed</div>
+              <div class="stat-value" id="jobDetailFailed">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-content">
+              <div class="stat-label">Total</div>
+              <div class="stat-value" id="jobDetailTotal">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" id="exportJobResults" class="btn-ghost">📥 Export Results (CSV)</button>
+          <button type="button" id="backToJobs" class="btn-ghost">← Back to Jobs</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">📝 Detailed Results</h3>
+        <div style="margin-bottom: 12px;">
+          <input type="text" id="jobResultsFilter" placeholder="Filter by phone number..." style="max-width: 300px;">
+        </div>
+        <div class="job-list" id="jobResultsList" style="max-height: 500px;">
+          Loading job details...
+        </div>
       </div>
     </div>
   </main>
@@ -904,13 +996,15 @@
       // Hide all views
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
-      // Update nav items
-      document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-        if (item.dataset.view === viewId) {
-          item.classList.add('active');
-        }
-      });
+      // Update nav items (only for main nav items)
+      if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs'].includes(viewId)) {
+        document.querySelectorAll('.nav-item').forEach(item => {
+          item.classList.remove('active');
+          if (item.dataset.view === viewId) {
+            item.classList.add('active');
+          }
+        });
+      }
 
       // Show target view
       let targetView = document.getElementById(`view-${viewId}`);
@@ -918,6 +1012,9 @@
         state.activeSession = sessionId;
         updateSessionDetailView();
         targetView = document.getElementById('view-session-detail');
+      } else if (viewId === 'job-detail') {
+        // Job detail view is already populated by viewJobDetail function
+        targetView = document.getElementById('view-job-detail');
       }
 
       if (targetView) {
@@ -932,8 +1029,9 @@
       updateAllSessionSelects();
 
       // Load jobs if needed
-      if (viewId === 'jobs' && state.activeSession) {
-        fetchJobsForSession(state.activeSession);
+      if (viewId === 'jobs') {
+        // Load all jobs by default with current filter
+        applyCurrentJobFilter();
       }
     }
 
@@ -1237,41 +1335,25 @@
         const hasPersonalization = messageTemplate.includes('{name}') && csvData.some(d => d.name);
 
         if (hasPersonalization) {
-          // Send personalized messages - need to create multiple broadcast jobs or modify approach
-          log.textContent = '⚠️ Personalized broadcast membutuhkan multiple API calls.\n' +
-            'Fitur ini akan mengirim pesan satu per satu dengan personalisasi.\n' +
-            'Mohon tunggu...';
+          // Use new personalized broadcast endpoint
+          log.textContent = '⚠️ Memulai personalized broadcast...\nMohon tunggu...';
 
-          // Send personalized messages individually
-          let sent = 0;
-          let failed = 0;
-          const total = csvData.length;
-
-          for (const contact of csvData) {
-            const personalizedMessage = messageTemplate.replace(/\{name\}/gi, contact.name || '');
-            try {
-              const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
-              await new Promise(resolve => setTimeout(resolve, delay));
-              await postJson(`/sessions/${sessionId}/send`, {
-                number: contact.phone,
-                message: personalizedMessage
-              });
-              sent++;
-              log.textContent = `Sending... ${sent}/${total} sent, ${failed} failed`;
-            } catch (err) {
-              failed++;
-              console.error(`Failed to send to ${contact.phone}:`, err);
-            }
-
-            // Cooldown every N messages
-            if (sent > 0 && sent % cooldownAfter === 0) {
-              const cooldownDelay = Math.floor(Math.random() * (cooldownMax - cooldownMin + 1)) + cooldownMin;
-              log.textContent = `Sending... ${sent}/${total} sent, ${failed} failed\n⏸️ Cooldown: ${Math.round(cooldownDelay / 1000)}s`;
-              await new Promise(resolve => setTimeout(resolve, cooldownDelay));
-            }
+          try {
+            const res = await postJson(`/sessions/${sessionId}/broadcast-personalized`, {
+              csvData: csvData,
+              messageTemplate: messageTemplate,
+              delayMinMs: delayMin,
+              delayMaxMs: delayMax,
+              cooldownAfter: cooldownAfter,
+              cooldownMinMs: cooldownMin,
+              cooldownMaxMs: cooldownMax,
+            });
+            log.textContent = `✓ Personalized broadcast job queued!\nJob ID: ${res.jobId}\nTotal: ${res.totals.total}`;
+            state.currentJobId = res.jobId;
+            pollJob(res.jobId, sessionId, log);
+          } catch (err) {
+            log.textContent = `✗ Error: ${err.message}`;
           }
-
-          log.textContent = `✅ Broadcast selesai!\n✓ Terkirim: ${sent}\n✗ Gagal: ${failed}\n📊 Total: ${total}`;
           return;
         } else {
           // No personalization, just send to all numbers
@@ -1343,12 +1425,43 @@
       }
     }
 
+    // Fetch all jobs with filters
+    async function fetchAllJobs(filters = {}) {
+      try {
+        const params = new URLSearchParams();
+        if (filters.startDate) params.append('startDate', filters.startDate);
+        if (filters.endDate) params.append('endDate', filters.endDate);
+        if (filters.limit) params.append('limit', filters.limit);
+
+        const url = `/jobs${params.toString() ? '?' + params.toString() : ''}`;
+        const data = await fetch(url).then(r => r.json());
+
+        // Update state with jobs
+        (data.jobs || []).forEach(j => { state.jobs[j.id] = j; });
+
+        // If filtering by session, also filter the rendered list
+        let jobsToRender = data.jobs || [];
+        if (filters.sessionId) {
+          jobsToRender = jobsToRender.filter(j => j.sessionId === filters.sessionId);
+        }
+
+        renderJobList(jobsToRender);
+      } catch (err) {
+        console.error('Failed to fetch jobs', err);
+      }
+    }
+
     // Render job list
-    function renderJobList() {
+    function renderJobList(jobListParam = null) {
       const target = document.getElementById('jobList');
-      const list = Object.values(state.jobs).sort((a, b) =>
+
+      // Use provided list or default to state
+      const list = jobListParam || Object.values(state.jobs).sort((a, b) =>
         (b.startedAt || b.requestedAt || 0) - (a.startedAt || a.requestedAt || 0)
       );
+
+      // Update job count
+      document.getElementById('jobCount').textContent = list.length;
 
       if (!list.length) {
         target.innerHTML = '<p style="color: var(--muted);">No jobs yet.</p>';
@@ -1361,11 +1474,16 @@
         const statusClass = j.status === 'completed' ? 'success' : j.status === 'failed' ? 'error' : 'warning';
         const next = j.nextResumeAt ? `<br><small style="color: var(--muted);">Cooldown until ${new Date(j.nextResumeAt).toLocaleTimeString()}</small>` : '';
 
+        // Format date
+        const date = new Date(j.completedAt || j.startedAt || j.requestedAt);
+        const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
         return `
-          <div class="job-item">
+          <div class="job-item" style="cursor: pointer;" onclick="viewJobDetail('${j.id}', '${j.sessionId}')">
             <div class="job-item-header">
-              <span class="job-item-id">${j.id}</span>
+              <span class="job-item-id">${j.id.substring(0, 8)}...</span>
               <span class="status-badge ${statusClass}">${j.status} (${phase})</span>
+              <span style="font-size: 12px; color: var(--muted); margin-left: auto;">${dateStr}</span>
             </div>
             <div class="job-item-stats">
               <div class="job-stat">
@@ -1386,9 +1504,196 @@
               </div>
             </div>
             ${next}
+            <div style="margin-top: 8px; font-size: 12px; color: var(--muted);">Session: ${j.sessionId} | Click to view details →</div>
           </div>
         `;
       }).join('');
+    }
+
+    // View job detail
+    let currentJob = null;
+
+    window.viewJobDetail = async function(jobId, sessionId) {
+      try {
+        const res = await fetch(`/sessions/${sessionId}/broadcast/${jobId}`).then(r => r.json());
+        currentJob = res.job;
+        state.jobs[jobId] = currentJob;
+
+        // Update UI
+        document.getElementById('jobDetailId').textContent = jobId.substring(0, 8) + '...';
+        document.getElementById('jobDetailStatus').textContent = currentJob.status;
+        document.getElementById('jobDetailPhase').textContent = currentJob.phase || currentJob.status;
+
+        const statusClass = currentJob.status === 'completed' ? 'success' :
+                          currentJob.status === 'failed' ? 'error' : 'warning';
+        document.getElementById('jobDetailStatus').className = `status-badge ${statusClass}`;
+
+        const totals = currentJob.totals || { sent: 0, skipped: 0, failed: 0, total: 0 };
+        document.getElementById('jobDetailSent').textContent = totals.sent;
+        document.getElementById('jobDetailSkipped').textContent = totals.skipped;
+        document.getElementById('jobDetailFailed').textContent = totals.failed;
+        document.getElementById('jobDetailTotal').textContent = totals.total;
+
+        renderJobResults(currentJob.results || []);
+
+        // Show job detail view
+        navigateTo('job-detail');
+      } catch (err) {
+        console.error('Failed to load job details:', err);
+        alert('Failed to load job details');
+      }
+    };
+
+    // Render job results
+    function renderJobResults(results, filter = '') {
+      const target = document.getElementById('jobResultsList');
+
+      if (!results || results.length === 0) {
+        target.innerHTML = '<p style="color: var(--muted);">No results yet.</p>';
+        return;
+      }
+
+      // Filter results
+      let filteredResults = results;
+      if (filter) {
+        filteredResults = results.filter(r =>
+          r.number && r.number.includes(filter)
+        );
+      }
+
+      target.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);">
+              <th style="text-align: left; padding: 10px; position: sticky; top: 0; background: #0f172a;">#</th>
+              <th style="text-align: left; padding: 10px; position: sticky; top: 0; background: #0f172a;">Phone</th>
+              <th style="text-align: left; padding: 10px; position: sticky; top: 0; background: #0f172a;">Status</th>
+              <th style="text-align: left; padding: 10px; position: sticky; top: 0; background: #0f172a;">Info</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredResults.map((r, i) => {
+              const statusClass = r.status === 'sent' ? 'success' :
+                                r.status === 'failed' ? 'error' : 'warning';
+              const statusIcon = r.status === 'sent' ? '✅' :
+                               r.status === 'failed' ? '❌' : '⏭️';
+              return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <td style="padding: 10px;">${i + 1}</td>
+                  <td style="padding: 10px; font-family: monospace;">${r.number || '-'}</td>
+                  <td style="padding: 10px;">
+                    <span class="status-badge ${statusClass}">${statusIcon} ${r.status}</span>
+                  </td>
+                  <td style="padding: 10px; color: var(--muted); max-width: 300px; word-wrap: break-word;">
+                    ${r.reason || r.error || '-'}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top: 12px; color: var(--muted); font-size: 13px;">
+          Showing ${filteredResults.length} of ${results.length} results
+        </div>
+      `;
+    }
+
+    // Setup job detail view handlers
+    function setupJobDetailHandlers() {
+      // Back to jobs button
+      document.getElementById('backToJobs')?.addEventListener('click', () => {
+        window.location.hash = 'jobs';
+      });
+
+      // Filter type change
+      document.getElementById('jobFilterType')?.addEventListener('change', (e) => {
+        const sessionFilter = document.getElementById('jobSessionFilter');
+        if (e.target.value === 'session') {
+          sessionFilter.style.display = 'block';
+        } else {
+          sessionFilter.style.display = 'none';
+        }
+      });
+
+      // Apply filter button
+      document.getElementById('applyJobFilter')?.addEventListener('click', async () => {
+        const filterType = document.getElementById('jobFilterType').value;
+        const sessionId = document.getElementById('jobsSessionSelect').value;
+        const startDate = document.getElementById('jobStartDate').value;
+        const endDate = document.getElementById('jobEndDate').value;
+        const limit = document.getElementById('jobLimit').value;
+
+        const filters = {};
+        if (startDate) filters.startDate = startDate;
+        if (endDate) filters.endDate = endDate;
+        if (limit) filters.limit = limit;
+        if (filterType === 'session') filters.sessionId = sessionId;
+
+        await fetchAllJobs(filters);
+      });
+
+      // Reset filter button
+      document.getElementById('resetJobFilter')?.addEventListener('click', async () => {
+        document.getElementById('jobFilterType').value = 'all';
+        document.getElementById('jobSessionFilter').style.display = 'none';
+        document.getElementById('jobStartDate').value = '';
+        document.getElementById('jobEndDate').value = '';
+        document.getElementById('jobLimit').value = '100';
+
+        await fetchAllJobs({ limit: 100 });
+      });
+
+      // Refresh jobs button
+      document.getElementById('refreshJobs')?.addEventListener('click', async () => {
+        await applyCurrentJobFilter();
+      });
+
+      // Export job results
+      document.getElementById('exportJobResults')?.addEventListener('click', () => {
+        if (!currentJob || !currentJob.results) {
+          alert('No results to export');
+          return;
+        }
+
+        const results = currentJob.results;
+        const csv = 'phone,status,reason,error\n' +
+          results.map(r =>
+            `${r.number || ''},${r.status || ''},"${r.reason || ''}","${r.error || ''}"`
+          ).join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `broadcast_results_${currentJob.id.substring(0, 8)}_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // Filter job results
+      document.getElementById('jobResultsFilter')?.addEventListener('input', (e) => {
+        const filter = e.target.value.trim();
+        if (currentJob && currentJob.results) {
+          renderJobResults(currentJob.results, filter);
+        }
+      });
+    }
+
+    // Helper to apply current filter
+    async function applyCurrentJobFilter() {
+      const filterType = document.getElementById('jobFilterType').value;
+      const sessionId = document.getElementById('jobsSessionSelect').value;
+      const startDate = document.getElementById('jobStartDate').value;
+      const endDate = document.getElementById('jobEndDate').value;
+      const limit = document.getElementById('jobLimit').value;
+
+      const filters = {};
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
+      if (limit) filters.limit = limit;
+      if (filterType === 'session') filters.sessionId = sessionId;
+
+      await fetchAllJobs(filters);
     }
 
     // Broadcast job updates
@@ -1414,9 +1719,11 @@
 
     // Session select change handlers
     document.getElementById('jobsSessionSelect')?.addEventListener('change', (e) => {
-      const sessionId = e.target.value;
-      if (sessionId) {
-        fetchJobsForSession(sessionId);
+      // Filter will be applied when user clicks "Apply Filter"
+      // or automatically if in session filter mode
+      const filterType = document.getElementById('jobFilterType')?.value;
+      if (filterType === 'session') {
+        applyCurrentJobFilter();
       }
     });
 
@@ -1723,6 +2030,7 @@
         setupDownloadTemplate();
         setupCsvUpload();
         setupPreviewCsv();
+        setupJobDetailHandlers();
       } catch (err) {
         console.error('Failed to load sessions', err);
       }
