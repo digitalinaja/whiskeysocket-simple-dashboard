@@ -153,7 +153,14 @@ function saveJobToFile(job) {
       fs.mkdirSync(JOBS_ROOT, { recursive: true });
     }
 
-    const jobJson = JSON.stringify(job, null, 2);
+    // Convert Sets to Arrays for JSON serialization
+    const jobForSave = {
+      ...job,
+      processedNumbers: Array.from(job.processedNumbers || []),
+      skippedNumbers: Array.from(job.skippedNumbers || []),
+    };
+
+    const jobJson = JSON.stringify(jobForSave, null, 2);
     console.log(`[SAVE JOB] Job JSON length: ${jobJson.length} chars`);
 
     fs.writeFileSync(filepath, jobJson);
@@ -175,14 +182,19 @@ function createPersonalizedJob(sessionId, numbers, messageTemplate, csvData) {
     completedAt: null,
     totals: { sent: 0, skipped: 0, failed: 0, total: csvData.length },
     processed: 0,
+    lastProcessedIndex: -1,
+    processedNumbers: new Set(),
+    skippedNumbers: new Set(),
     phase: "running",
     results: [],
+    lastSaveTime: 0,
     config: {
       personalized: true,
       messageTemplate,
+      saveInterval: 5,
     },
     message: messageTemplate,
-    csvData: csvData, // Store original CSV data
+    csvData: csvData,
   };
 
   broadcastJobs.set(id, job);
@@ -196,22 +208,195 @@ function loadExistingJobs() {
   try {
     const files = fs.readdirSync(JOBS_ROOT);
     const jobFiles = files.filter(f => f.endsWith('.json'));
+    const jobsNeedingResume = [];
 
     jobFiles.forEach(file => {
       try {
         const filepath = path.join(JOBS_ROOT, file);
         const jobData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+
+        // Restore Sets from Arrays
+        jobData.processedNumbers = new Set(jobData.processedNumbers || []);
+        jobData.skippedNumbers = new Set(jobData.skippedNumbers || []);
+
         broadcastJobs.set(jobData.id, jobData);
-        console.log(`Loaded job ${jobData.id}`);
+        console.log(`Loaded job ${jobData.id} (status: ${jobData.status})`);
+
+        // Check if job needs resume
+        if (jobData.status === 'running' || jobData.status === 'resuming') {
+          jobsNeedingResume.push(jobData);
+        }
       } catch (err) {
         console.error(`Failed to load job from ${file}:`, err);
       }
     });
 
     console.log(`Loaded ${jobFiles.length} jobs from disk`);
+
+    // Resume jobs that were interrupted
+    if (jobsNeedingResume.length > 0) {
+      console.log(`Found ${jobsNeedingResume.length} jobs needing resume...`);
+
+      // Wait for sessions to connect, then resume
+      setTimeout(() => {
+        jobsNeedingResume.forEach(job => {
+          console.log(`[RESUME ATTEMPT] Attempting to resume job ${job.id} (session: ${job.sessionId})`);
+          resumeJob(job);
+        });
+      }, 5000); // Wait 5 seconds for sessions to connect
+    }
   } catch (err) {
     console.error("Failed to load existing jobs", err);
   }
+}
+
+// Resume a job that was interrupted
+function resumeJob(job) {
+  const session = sessions.get(job.sessionId);
+  if (!session || !session.sock || session.status.state !== 'open') {
+    console.log(`[RESUME SKIP] Job ${job.id} cannot resume - session not ready`);
+    job.status = "failed";
+    job.completedAt = Date.now();
+    job.phase = "failed";
+    job.totals.failed += 1;
+    saveJobToFile(job);
+    return;
+  }
+
+  // Check if job was in cooldown
+  const wasInCooldown = job.phase === "cooldown" && job.nextResumeAt;
+
+  job.status = "resuming";
+  console.log(`[RESUME START] Job ${job.id} resuming from index ${job.lastProcessedIndex + 1} ${wasInCooldown ? '(was in cooldown)' : ''}`);
+  emitBroadcastUpdate(job.sessionId, job);
+
+  // Re-create the job run logic with the saved state
+  const run = async () => {
+    job.status = "running";
+    job.phase = "running";
+    emitBroadcastUpdate(job.sessionId, job);
+
+    const startIndex = job.lastProcessedIndex + 1;
+    console.log(`[RESUME] Job ${job.id} continuing from index ${startIndex} of ${job.numbers.length}`);
+
+    // If was in cooldown and nextResumeAt is in future, wait
+    if (wasInCooldown && job.nextResumeAt) {
+      const now = Date.now();
+      if (job.nextResumeAt > now) {
+        const waitTime = job.nextResumeAt - now;
+        console.log(`[RESUME COOLDOWN] Job ${job.id} was in cooldown, waiting ${waitTime}ms before continuing`);
+        job.phase = "cooldown";
+        emitBroadcastUpdate(job.sessionId, job);
+        await sleep(waitTime);
+        job.phase = "running";
+        job.nextResumeAt = null;
+        emitBroadcastUpdate(job.sessionId, job);
+      } else {
+        // Cooldown already passed, clear it
+        console.log(`[RESUME COOLDOWN] Job ${job.id} cooldown already passed, continuing`);
+        job.nextResumeAt = null;
+      }
+    }
+
+    for (let i = startIndex; i < job.numbers.length; i++) {
+      const number = job.numbers[i];
+      const normalized = normalizeNumber(number);
+
+      // Skip if already processed
+      if (job.processedNumbers.has(normalized) || job.skippedNumbers.has(normalized)) {
+        console.log(`[RESUME SKIP] Already processed: ${normalized}, skipping`);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
+        continue;
+      }
+
+      if (!normalized) {
+        job.results.push({ number, status: "skipped", reason: "invalid number" });
+        job.totals.skipped += 1;
+        job.skippedNumbers.add(number);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
+        emitBroadcastUpdate(job.sessionId, job);
+        continue;
+      }
+
+      const exists = await ensureWhatsAppNumber(session.sock, normalized);
+      if (!exists) {
+        job.results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp" });
+        job.totals.skipped += 1;
+        job.skippedNumbers.add(normalized);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
+        emitBroadcastUpdate(job.sessionId, job);
+        continue;
+      }
+
+      try {
+        const delay = randomBetween(job.config.delayMinMs, job.config.delayMaxMs);
+        await sleep(delay);
+        await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: job.message });
+        job.results.push({ number: normalized, status: "sent" });
+        job.totals.sent += 1;
+        job.processedNumbers.add(normalized);
+      } catch (err) {
+        console.error("[RESUME] Send failed", err);
+        job.results.push({
+          number: normalized,
+          status: "failed",
+          error: err?.message || "Failed to send",
+        });
+        job.totals.failed += 1;
+      }
+
+      job.processed = i + 1;
+      job.lastProcessedIndex = i;
+      emitBroadcastUpdate(job.sessionId, job);
+
+      // Periodic save
+      if (job.totals.sent % job.config.saveInterval === 0) {
+        job.lastSaveTime = Date.now();
+        saveJobToFile(job);
+        console.log(`[RESUME SAVE] Job ${job.id} saved at index ${i} (${job.totals.sent} sent)`);
+      }
+
+      // Cooldown
+      const shouldCooldown =
+        job.config.cooldownAfter > 0 &&
+        job.processed > 0 &&
+        job.processed % job.config.cooldownAfter === 0;
+
+      if (shouldCooldown) {
+        const wait = randomBetween(job.config.cooldownMinMs, job.config.cooldownMaxMs);
+        job.phase = "cooldown";
+        job.nextResumeAt = Date.now() + wait;
+        saveJobToFile(job);
+        console.log(`[RESUME COOLDOWN] Job ${job.id} entering cooldown for ${wait}ms`);
+        emitBroadcastUpdate(job.sessionId, job);
+        await sleep(wait);
+        job.phase = "running";
+        job.nextResumeAt = null;
+        emitBroadcastUpdate(job.sessionId, job);
+      }
+    }
+
+    job.status = "completed";
+    job.completedAt = Date.now();
+    job.phase = "completed";
+    console.log(`[RESUME COMPLETE] Job ${job.id} completed. Sent: ${job.totals.sent}, Failed: ${job.totals.failed}, Skipped: ${job.totals.skipped}`);
+    emitBroadcastUpdate(job.sessionId, job);
+    saveJobToFile(job);
+  };
+
+  setImmediate(() => {
+    run().catch((err) => {
+      console.error("[RESUME] Job crashed", err);
+      job.status = "failed";
+      job.completedAt = Date.now();
+      job.phase = "failed"; // Make sure phase is updated
+      emitBroadcastUpdate(job.sessionId, job);
+      saveJobToFile(job);
+    });
+  });
 }
 
 function createBroadcastJob(
@@ -230,38 +415,59 @@ function createBroadcastJob(
   const job = {
     id,
     sessionId,
-    status: "queued", // queued | running | completed | failed | cancelled
+    status: "queued", // queued | running | completed | failed | cancelled | resuming
     requestedAt: Date.now(),
     startedAt: null,
     completedAt: null,
     totals: { sent: 0, skipped: 0, failed: 0, total: numbers.length },
     processed: 0,
+    lastProcessedIndex: -1, // Track last processed index for resume
+    processedNumbers: new Set(), // Track successfully sent numbers
+    skippedNumbers: new Set(), // Track skipped numbers
     phase: "queued", // queued | running | cooldown
     nextResumeAt: null,
+    lastSaveTime: 0, // Track last save for throttling
     results: [],
+    numbers: numbers, // Store original numbers array for resume
     config: {
       delayMinMs,
       delayMaxMs,
       cooldownAfter,
       cooldownMinMs,
       cooldownMaxMs,
+      saveInterval: 5, // Save every 5 messages
     },
     message,
   };
   broadcastJobs.set(id, job);
   const session = sessions.get(sessionId);
 
-  const run = async () => {
-    job.status = "running";
+  const run = async (startIndex = 0) => {
+    job.status = job.status === "resuming" ? "resuming" : "running";
     job.phase = "running";
-    job.startedAt = Date.now();
+    if (!job.startedAt) job.startedAt = Date.now();
+
+    console.log(`[JOB START] Job ${job.id} starting from index ${startIndex}`);
     emitBroadcastUpdate(sessionId, job);
 
-    for (const number of numbers) {
+    for (let i = startIndex; i < numbers.length; i++) {
+      const number = numbers[i];
       const normalized = normalizeNumber(number);
+
+      // Skip if already processed (resume scenario)
+      if (job.processedNumbers.has(normalized) || job.skippedNumbers.has(normalized)) {
+        console.log(`[JOB SKIP] Already processed: ${normalized}, skipping`);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
+        continue;
+      }
+
       if (!normalized) {
         job.results.push({ number, status: "skipped", reason: "invalid number" });
         job.totals.skipped += 1;
+        job.skippedNumbers.add(number);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
         emitBroadcastUpdate(sessionId, job);
         continue;
       }
@@ -270,6 +476,9 @@ function createBroadcastJob(
       if (!exists) {
         job.results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp" });
         job.totals.skipped += 1;
+        job.skippedNumbers.add(normalized);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
         emitBroadcastUpdate(sessionId, job);
         continue;
       }
@@ -280,6 +489,7 @@ function createBroadcastJob(
         await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: message });
         job.results.push({ number: normalized, status: "sent" });
         job.totals.sent += 1;
+        job.processedNumbers.add(normalized);
       } catch (err) {
         console.error("Broadcast send failed", err);
         job.results.push({
@@ -290,8 +500,16 @@ function createBroadcastJob(
         job.totals.failed += 1;
       }
 
-      job.processed += 1;
+      job.processed = i + 1;
+      job.lastProcessedIndex = i;
       emitBroadcastUpdate(sessionId, job);
+
+      // Periodic save every N messages
+      if (job.totals.sent % job.config.saveInterval === 0) {
+        job.lastSaveTime = Date.now();
+        saveJobToFile(job);
+        console.log(`[PERIODIC SAVE] Job ${job.id} saved at index ${i} (${job.totals.sent} sent)`);
+      }
 
       const shouldCooldown =
         job.config.cooldownAfter > 0 &&
@@ -302,6 +520,8 @@ function createBroadcastJob(
         const wait = randomBetween(job.config.cooldownMinMs, job.config.cooldownMaxMs);
         job.phase = "cooldown";
         job.nextResumeAt = Date.now() + wait;
+        saveJobToFile(job); // Save before cooldown
+        console.log(`[COOLDOWN] Job ${job.id} entering cooldown for ${wait}ms`);
         emitBroadcastUpdate(sessionId, job);
         await sleep(wait);
         job.phase = "running";
@@ -313,9 +533,9 @@ function createBroadcastJob(
     job.status = "completed";
     job.completedAt = Date.now();
     job.phase = "completed";
-    console.log(`[JOB COMPLETE] Job ${job.id} completed. Sent: ${job.totals.sent}, Failed: ${job.totals.failed}`);
+    console.log(`[JOB COMPLETE] Job ${job.id} completed. Sent: ${job.totals.sent}, Failed: ${job.totals.failed}, Skipped: ${job.totals.skipped}`);
     emitBroadcastUpdate(sessionId, job);
-    saveJobToFile(job); // Auto-save when completed
+    saveJobToFile(job); // Final save when completed
   };
 
   // kick off async, but don't await inside request
@@ -325,7 +545,7 @@ function createBroadcastJob(
       job.status = "failed";
       job.completedAt = Date.now();
       emitBroadcastUpdate(sessionId, job);
-      saveJobToFile(job); // Also save on failure
+      saveJobToFile(job); // Save on failure
     });
   });
 
@@ -454,31 +674,74 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
     return res.status(400).json({ error: "csvData array required" });
   }
 
-  // Create tracking job
-  const job = createPersonalizedJob(id, csvData.map(d => d.phone), messageTemplate, csvData);
+  // Create tracking job with proper resume support
+  const jobId = randomUUID();
+  const job = {
+    id: jobId,
+    sessionId: id,
+    status: "running",
+    requestedAt: Date.now(),
+    startedAt: Date.now(),
+    completedAt: null,
+    totals: { sent: 0, skipped: 0, failed: 0, total: csvData.length },
+    processed: 0,
+    lastProcessedIndex: -1,
+    processedNumbers: new Set(),
+    skippedNumbers: new Set(),
+    phase: "running",
+    results: [],
+    lastSaveTime: 0,
+    config: {
+      personalized: true,
+      messageTemplate,
+      delayMinMs,
+      delayMaxMs,
+      cooldownAfter,
+      cooldownMinMs,
+      cooldownMaxMs,
+      saveInterval: 5,
+    },
+    message: messageTemplate,
+    csvData: csvData, // Store for resume
+  };
 
-  // Send messages asynchronously
+  broadcastJobs.set(jobId, job);
+  emitBroadcastUpdate(id, job);
+
+  // Send messages asynchronously with proper tracking
   const runPersonalized = async () => {
-    let sent = 0;
-    let failed = 0;
+    console.log(`[PERSONALIZED JOB START] Job ${jobId} starting`);
 
-    for (const contact of csvData) {
+    for (let i = 0; i < csvData.length; i++) {
+      const contact = csvData[i];
       const personalizedMessage = messageTemplate.replace(/\{name\}/gi, contact.name || '');
       const normalized = normalizeNumber(contact.phone);
 
+      // Skip if already processed (resume scenario)
+      if (job.processedNumbers.has(normalized) || job.skippedNumbers.has(normalized)) {
+        console.log(`[PERSONALIZED SKIP] Already processed: ${normalized}, skipping`);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
+        continue;
+      }
+
       if (!normalized) {
-        job.results.push({ number: contact.phone, status: "skipped", reason: "invalid number" });
+        job.results.push({ number: contact.phone, status: "skipped", reason: "invalid number", name: contact.name });
         job.totals.skipped += 1;
-        job.processed += 1;
+        job.skippedNumbers.add(contact.phone);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
         emitBroadcastUpdate(id, job);
         continue;
       }
 
       const exists = await ensureWhatsAppNumber(session.sock, normalized);
       if (!exists) {
-        job.results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp" });
+        job.results.push({ number: normalized, status: "skipped", reason: "not on WhatsApp", name: contact.name });
         job.totals.skipped += 1;
-        job.processed += 1;
+        job.skippedNumbers.add(normalized);
+        job.processed = i + 1;
+        job.lastProcessedIndex = i;
         emitBroadcastUpdate(id, job);
         continue;
       }
@@ -489,7 +752,7 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
         await session.sock.sendMessage(`${normalized}@s.whatsapp.net`, { text: personalizedMessage });
         job.results.push({ number: normalized, status: "sent", name: contact.name });
         job.totals.sent += 1;
-        sent++;
+        job.processedNumbers.add(normalized);
       } catch (err) {
         console.error("Personalized send failed", err);
         job.results.push({
@@ -499,17 +762,26 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
           name: contact.name
         });
         job.totals.failed += 1;
-        failed++;
       }
 
-      job.processed += 1;
+      job.processed = i + 1;
+      job.lastProcessedIndex = i;
       emitBroadcastUpdate(id, job);
+
+      // Periodic save
+      if (job.totals.sent % job.config.saveInterval === 0) {
+        job.lastSaveTime = Date.now();
+        saveJobToFile(job);
+        console.log(`[PERSONALIZED SAVE] Job ${jobId} saved at index ${i} (${job.totals.sent} sent)`);
+      }
 
       // Cooldown
       if (job.processed > 0 && job.processed % cooldownAfter === 0) {
         const wait = randomBetween(cooldownMinMs, cooldownMaxMs);
         job.phase = "cooldown";
         job.nextResumeAt = Date.now() + wait;
+        saveJobToFile(job);
+        console.log(`[PERSONALIZED COOLDOWN] Job ${jobId} entering cooldown for ${wait}ms`);
         emitBroadcastUpdate(id, job);
         await sleep(wait);
         job.phase = "running";
@@ -521,7 +793,7 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
     job.status = "completed";
     job.completedAt = Date.now();
     job.phase = "completed";
-    console.log(`[PERSONALIZED JOB COMPLETE] Job ${job.id}. Sent: ${sent}, Failed: ${failed}`);
+    console.log(`[PERSONALIZED COMPLETE] Job ${jobId}. Sent: ${job.totals.sent}, Failed: ${job.totals.failed}, Skipped: ${job.totals.skipped}`);
     emitBroadcastUpdate(id, job);
     saveJobToFile(job);
   };
@@ -538,7 +810,7 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
 
   res.json({
     status: "queued",
-    jobId: job.id,
+    jobId: jobId,
     totals: job.totals,
     message: "Personalized broadcast started",
   });
