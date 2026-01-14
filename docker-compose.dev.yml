@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  whiskeysocket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whiskeysocket-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      # Mount auth directory for session persistence
+      - ./auth:/app/auth
+      # Mount jobs directory for job state persistence
+      - ./jobs:/app/jobs
+      # Mount source code for development (hot reload compatible)
+      - ./src:/app/src
+      - ./public:/app/public
