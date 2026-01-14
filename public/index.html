@@ -2925,7 +2925,12 @@
     // Render Chat Contacts List
     function renderChatContactsList() {
       const listDiv = document.getElementById('chatContactsList');
-      const contacts = Object.values(chatState.contacts);
+      const contacts = Object.values(chatState.contacts).sort((a, b) => {
+        // Sort by last interaction (most recent first)
+        const aTime = a.lastInteraction ? new Date(a.lastInteraction).getTime() : 0;
+        const bTime = b.lastInteraction ? new Date(b.lastInteraction).getTime() : 0;
+        return bTime - aTime; // Descending order (newest first)
+      });
 
       if (contacts.length === 0) {
         listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">No contacts found</div>';
@@ -3169,6 +3174,42 @@
     document.getElementById('viewContactBtn')?.addEventListener('click', () => {
       if (chatState.currentContact) {
         showContactDetailModal(chatState.currentContact.id);
+      }
+    });
+
+    // CRM Quick Actions - Update Status
+    document.getElementById('updateStatusBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on status dropdown in modal after it opens
+        setTimeout(() => {
+          const statusSelect = document.getElementById('modalLeadStatusSelect');
+          if (statusSelect) statusSelect.focus();
+        }, 300);
+      }
+    });
+
+    // CRM Quick Actions - Add Tag
+    document.getElementById('addTagBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on tag input in modal after it opens
+        setTimeout(() => {
+          const tagInput = document.getElementById('modalTagInput');
+          if (tagInput) tagInput.focus();
+        }, 300);
+      }
+    });
+
+    // CRM Quick Actions - Add Note
+    document.getElementById('addNoteBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on note input in modal after it opens
+        setTimeout(() => {
+          const noteInput = document.getElementById('modalNoteInput');
+          if (noteInput) noteInput.focus();
+        }, 300);
       }
     });
 
@@ -3424,10 +3465,26 @@
         }
       });
 
-      document.getElementById('openChatFromModal')?.addEventListener('click', () => {
+      document.getElementById('openChatFromModal')?.addEventListener('click', async () => {
+        // First, ensure the contact is in chatState.contacts
+        if (!chatState.contacts[contact.id]) {
+          chatState.contacts[contact.id] = contact;
+        }
+
+        // Ensure we have the correct session set
+        if (!chatState.currentSession) {
+          chatState.currentSession = contact.sessionId;
+        }
+
+        // Close modal and navigate to chat
+        const modal = document.getElementById('contactDetailModal');
         modal.classList.remove('active');
         window.location.hash = 'chat';
-        setTimeout(() => openChatContact(contact.id), 100);
+
+        // Wait for view to switch, then open chat
+        setTimeout(() => {
+          openChatContact(contact.id);
+        }, 200);
       });
     }
 
