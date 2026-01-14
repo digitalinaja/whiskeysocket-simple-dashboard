@@ -551,6 +551,739 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
+    /* ============================================
+       CHAT LAYOUT STYLES
+       ============================================ */
+
+    /* Chat Container - 2-column layout */
+    .chat-container {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1px;
+      background: var(--border);
+      height: calc(100vh - 64px);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    /* Contacts Sidebar */
+    .chat-contacts-sidebar {
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .chat-header select,
+    .chat-header input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .contacts-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .loading-contacts {
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    /* Contact Item */
+    .contact-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 4px;
+    }
+
+    .contact-item:hover {
+      background: var(--panel-light);
+    }
+
+    .contact-item.active {
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.2);
+    }
+
+    .contact-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 18px;
+      flex-shrink: 0;
+      color: var(--bg);
+    }
+
+    .contact-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contact-item-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contact-item-preview {
+      font-size: 13px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contact-item-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .unread-badge {
+      background: var(--accent);
+      color: var(--bg);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    /* Chat Window */
+    .chat-window {
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .welcome-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .chat-conversation {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .chat-window-header {
+      padding: 16px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-window-header .contact-info {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .chat-window-header .contact-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .chat-window-header .contact-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .chat-window-header .contact-phone {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      background: var(--panel-light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: var(--border);
+      transform: translateY(-1px);
+    }
+
+    /* Messages */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      display: flex;
+      gap: 8px;
+      max-width: 70%;
+      animation: slideIn 0.2s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.outgoing {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-bubble {
+      padding: 12px 16px;
+      border-radius: 16px;
+      word-wrap: break-word;
+    }
+
+    .message.incoming .message-bubble {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.outgoing .message-bubble {
+      background: var(--accent);
+      color: var(--bg);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .message.outgoing .message-time {
+      color: rgba(0,0,0,0.6);
+    }
+
+    .message-status {
+      font-size: 10px;
+      margin-left: 4px;
+    }
+
+    /* Message Input */
+    .message-input-area {
+      padding: 16px 20px;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+    }
+
+    .crm-quick-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+      background: var(--panel-light);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-sm:hover {
+      background: var(--border);
+    }
+
+    .message-input-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    #messageInput {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    #messageInput:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn-send {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 18px;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-send:hover {
+      transform: scale(1.05);
+    }
+
+    /* ============================================
+       CRM LAYOUT STYLES
+       ============================================ */
+
+    /* CRM Container */
+    .crm-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+    }
+
+    /* Filters Sidebar */
+    .crm-filters-sidebar {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 20px;
+      height: fit-content;
+    }
+
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .filter-section label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .filter-section select,
+    .filter-section input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .tags-checkboxes {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tag-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Contacts Grid */
+    .crm-contacts-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .crm-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .contact-count {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .sync-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .google-status,
+    .google-notice {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--panel-light);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .contacts-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    /* Contact Card */
+    .contact-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .contact-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .contact-card-header {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .contact-card-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: var(--bg);
+    }
+
+    .contact-card-info {
+      flex: 1;
+    }
+
+    .contact-card-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .contact-card-phone {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .contact-card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .tag-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .lead-status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .contact-card-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+      min-width: 40px;
+      height: 40px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .pagination-btn:hover:not(:disabled):not(.active) {
+      background: var(--panel-light);
+      border-color: var(--primary);
+    }
+
+    .pagination-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-ellipsis {
+      color: var(--muted);
+      padding: 0 8px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--panel);
+      border-radius: 16px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      font-size: 18px;
+      background: var(--panel-light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .contact-detail-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .contact-detail-header .contact-avatar {
+      width: 80px;
+      height: 80px;
+      font-size: 32px;
+      margin: 0 auto 16px;
+    }
+
+    .contact-detail-section {
+      margin-bottom: 24px;
+    }
+
+    .contact-detail-section h4 {
+      margin-bottom: 12px;
+    }
+
+    .contact-tags-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tag-badge button {
+      background: none;
+      border: none;
+      margin-left: 4px;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+
+    .tag-badge button:hover {
+      opacity: 1;
+    }
+
+    .note-item {
+      background: var(--panel-light);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .modal-actions {
+      margin-top: 24px;
+      text-align: right;
+    }
+
+    /* Button Styles */
+    .btn-ghost {
+      background: var(--panel-light);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .btn-ghost:hover {
+      background: var(--border);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+      .crm-container {
+        grid-template-columns: 1fr;
+      }
+
+      .crm-filters-sidebar {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .chat-container {
+        grid-template-columns: 1fr;
+      }
+
+      .chat-contacts-sidebar {
+        display: flex;
+      }
+
+      .chat-contacts-sidebar.hidden {
+        display: none;
+      }
+
+      .contacts-cards {
+        grid-template-columns: 1fr;
+      }
+
+      .crm-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .sync-buttons {
+        flex-direction: column;
+      }
+    }
   </style>
 </head>
 <body>
@@ -583,13 +1316,25 @@
 
       <div class="nav-section">
         <div class="nav-section-title">Messaging</div>
-        <a href="#send-message" class="nav-item" data-view="send-message">
+        <a href="#chat" class="nav-item" data-view="chat">
           <span class="icon">💬</span>
+          <span>Chat</span>
+        </a>
+        <a href="#send-message" class="nav-item" data-view="send-message">
+          <span class="icon">📤</span>
           <span>Send Message</span>
         </a>
         <a href="#broadcast" class="nav-item" data-view="broadcast">
           <span class="icon">📢</span>
           <span>Broadcast</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">CRM</div>
+        <a href="#contacts" class="nav-item" data-view="contacts">
+          <span class="icon">👥</span>
+          <span>Contacts</span>
         </a>
       </div>
 
@@ -976,6 +1721,149 @@
         </div>
       </div>
     </div>
+
+    <!-- Chat View -->
+    <div id="view-chat" class="view">
+      <div class="chat-container">
+        <!-- Contacts Sidebar -->
+        <div class="chat-contacts-sidebar">
+          <div class="chat-header">
+            <div class="session-selector">
+              <select id="chatSessionSelect">
+                <option value="">Select Session...</option>
+              </select>
+            </div>
+            <div class="search-box">
+              <input type="text" id="chatSearchInput" placeholder="Search contacts...">
+            </div>
+          </div>
+          <div class="contacts-list" id="chatContactsList">
+            <div class="loading-contacts">Loading contacts...</div>
+          </div>
+        </div>
+
+        <!-- Chat Window -->
+        <div class="chat-window">
+          <div id="chatWelcome" class="chat-welcome">
+            <div class="welcome-icon">💬</div>
+            <h3>Welcome to Chat</h3>
+            <p>Select a contact to start messaging</p>
+          </div>
+
+          <div id="chatConversation" class="chat-conversation" style="display: none;">
+            <!-- Chat Header -->
+            <div class="chat-window-header">
+              <div class="contact-info">
+                <div class="contact-avatar" id="chatContactAvatar">?</div>
+                <div class="contact-details">
+                  <div class="contact-name" id="chatContactName">-</div>
+                  <div class="contact-phone" id="chatContactPhone">-</div>
+                </div>
+              </div>
+              <div class="chat-actions">
+                <button class="btn-icon" id="viewContactBtn" title="View Contact Details">👤</button>
+                <button class="btn-icon" id="refreshChatBtn" title="Sync Chat History">🔄</button>
+              </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+              <!-- Messages will be rendered here -->
+            </div>
+
+            <!-- Message Input -->
+            <div class="message-input-area">
+              <div class="crm-quick-actions" id="crmQuickActions">
+                <button id="updateStatusBtn" class="btn-sm">📊 Status</button>
+                <button id="addTagBtn" class="btn-sm">🏷️ Tag</button>
+                <button id="addNoteBtn" class="btn-sm">📝 Note</button>
+              </div>
+              <div class="message-input-wrapper">
+                <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+                <button id="sendMessageBtn" class="btn-send">➤</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contacts/CRM View -->
+    <div id="view-contacts" class="view">
+      <div class="page-header">
+        <h2 class="page-title">Contacts & Leads</h2>
+        <p class="page-subtitle">Manage your contacts and track leads</p>
+      </div>
+
+      <div class="crm-container">
+        <!-- Filters Sidebar -->
+        <div class="crm-filters-sidebar">
+          <div class="filter-section">
+            <h3>Filters</h3>
+            <div class="session-filter">
+              <label>Session</label>
+              <select id="crmSessionSelect">
+                <option value="">Select Session...</option>
+              </select>
+            </div>
+            <div class="search-filter">
+              <label>Search</label>
+              <input type="text" id="crmSearchInput" placeholder="Name, phone...">
+            </div>
+            <div class="status-filter">
+              <label>Lead Status</label>
+              <select id="crmStatusFilter">
+                <option value="">All Statuses</option>
+              </select>
+            </div>
+            <div class="tags-filter">
+              <label>Tags</label>
+              <div id="crmTagsFilter" class="tags-checkboxes">
+                <!-- Tag checkboxes will be rendered here -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contacts Grid -->
+        <div class="crm-contacts-grid">
+          <div class="crm-toolbar">
+            <div class="contact-count" id="crmContactCount">0 contacts</div>
+            <div class="sync-buttons">
+              <button id="syncWhatsAppBtn" class="btn-ghost">📱 Sync WhatsApp</button>
+              <button id="syncGoogleBtn" class="btn-ghost">📇 Sync Google Contacts</button>
+            </div>
+          </div>
+          <div id="googleStatus" class="google-status" style="display: none;">
+            <span id="googleConnectionStatus">✅ Connected to Google</span>
+            <button id="disconnectGoogleBtn" class="btn-ghost btn-sm">Disconnect</button>
+          </div>
+          <div id="googleNotConnected" class="google-notice" style="display: none;">
+            <span>📇 Google Contacts not connected</span>
+            <button id="connectGoogleBtn" class="btn-sm btn-primary">Connect Google</button>
+          </div>
+          <div class="contacts-cards" id="crmContactsCards">
+            <div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 40px;">
+              Loading contacts...
+            </div>
+          </div>
+          <div class="pagination" id="crmPagination" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact Detail Modal -->
+    <div id="contactDetailModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Contact Details</h3>
+          <button class="modal-close" id="closeContactModal">✕</button>
+        </div>
+        <div class="modal-body" id="contactDetailModalBody">
+          <!-- Contact details will be rendered here -->
+        </div>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -997,7 +1885,7 @@
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
       // Update nav items (only for main nav items)
-      if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs'].includes(viewId)) {
+      if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'contacts'].includes(viewId)) {
         document.querySelectorAll('.nav-item').forEach(item => {
           item.classList.remove('active');
           if (item.dataset.view === viewId) {
@@ -2037,6 +2925,1023 @@
     }
 
     init();
+
+    // ============================================
+    // CHAT & CRM FUNCTIONALITY
+    // ============================================
+
+    // Chat State
+    const chatState = {
+      currentSession: null,
+      currentContact: null,
+      contacts: {},
+      messages: {},
+      tags: {},
+      leadStatuses: {}
+    };
+
+    // Load Chat Contacts
+    async function loadChatContacts(sessionId, search = '') {
+      if (!sessionId) return;
+
+      try {
+        const params = new URLSearchParams({
+          sessionId,
+          search,
+          limit: '50'
+        });
+
+        const res = await fetch(`/api/contacts?${params}`);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error);
+
+        chatState.contacts = {};
+        data.contacts.forEach(contact => {
+          chatState.contacts[contact.id] = contact;
+        });
+
+        renderChatContactsList();
+      } catch (err) {
+        console.error('Failed to load contacts:', err);
+      }
+    }
+
+    // Render Chat Contacts List
+    function renderChatContactsList() {
+      const listDiv = document.getElementById('chatContactsList');
+      const contacts = Object.values(chatState.contacts).sort((a, b) => {
+        // Sort by last interaction (most recent first)
+        const aTime = a.lastInteraction ? new Date(a.lastInteraction).getTime() : 0;
+        const bTime = b.lastInteraction ? new Date(b.lastInteraction).getTime() : 0;
+        return bTime - aTime; // Descending order (newest first)
+      });
+
+      if (contacts.length === 0) {
+        listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">No contacts found</div>';
+        return;
+      }
+
+      listDiv.innerHTML = contacts.map(contact => {
+        const isActive = chatState.currentContact?.id === contact.id;
+        const lastMsg = contact.lastMessage;
+        const time = lastMsg ? formatMessageTime(lastMsg.timestamp) : '';
+
+        return `
+          <div class="contact-item ${isActive ? 'active' : ''}" data-contact-id="${contact.id}">
+            <div class="contact-avatar">${contact.name ? contact.name[0] : '?'}</div>
+            <div class="contact-item-info">
+              <div class="contact-item-name">${contact.name || contact.phone}</div>
+              <div class="contact-item-preview">${lastMsg ? lastMsg.content : 'No messages yet'}</div>
+            </div>
+            <div class="contact-item-meta">
+              <div>${time}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Add click handlers
+      listDiv.querySelectorAll('.contact-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const contactId = parseInt(item.dataset.contactId);
+          openChatContact(contactId);
+        });
+      });
+    }
+
+    // Open Chat with Contact
+    async function openChatContact(contactId) {
+      const contact = chatState.contacts[contactId];
+      if (!contact) return;
+
+      chatState.currentContact = contact;
+
+      // Update UI
+      document.getElementById('chatWelcome').style.display = 'none';
+      document.getElementById('chatConversation').style.display = 'flex';
+
+      document.getElementById('chatContactName').textContent = contact.name || contact.phone;
+      document.getElementById('chatContactPhone').textContent = contact.phone;
+      document.getElementById('chatContactAvatar').textContent = contact.name ? contact.name[0] : '?';
+
+      // Load messages
+      await loadContactMessages(contact.id);
+
+      // Re-render contacts list to update active state
+      renderChatContactsList();
+
+      // Scroll to bottom
+      scrollToMessageBottom();
+    }
+
+    // Load Messages for Contact
+    async function loadContactMessages(contactId) {
+      try {
+        const sessionId = chatState.currentSession;
+        const res = await fetch(`/api/contacts/${contactId}/messages?sessionId=${sessionId}&limit=100`);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error);
+
+        chatState.messages[contactId] = data.messages;
+        renderMessages();
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
+    }
+
+    // Render Messages
+    function renderMessages() {
+      const container = document.getElementById('messagesContainer');
+      const messages = chatState.messages[chatState.currentContact.id] || [];
+
+      if (messages.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 40px;">No messages yet. Start the conversation!</div>';
+        return;
+      }
+
+      container.innerHTML = messages.map(msg => {
+        const isOutgoing = msg.direction === 'outgoing';
+        const time = formatMessageTime(msg.timestamp);
+
+        return `
+          <div class="message ${isOutgoing ? 'outgoing' : 'incoming'}">
+            <div class="message-bubble">
+              ${escapeHtml(msg.content)}
+              <div class="message-time">
+                ${time}
+                ${isOutgoing ? `<span class="message-status">${getMessageStatusIcon(msg.status)}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Send Message
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const content = input.value.trim();
+
+      if (!content || !chatState.currentContact || !chatState.currentSession) {
+        alert('Please select a session and contact first');
+        return;
+      }
+
+      try {
+        const data = await postJson('/api/chat/send', {
+          sessionId: chatState.currentSession,
+          phone: chatState.currentContact.phone,
+          content,
+          type: 'text'
+        });
+
+        // postJson throws error if not ok, so if we get here, it succeeded
+        input.value = '';
+        input.style.height = 'auto'; // Reset height
+
+        // Add message to local state
+        const newMessage = {
+          id: data.message.id,
+          direction: 'outgoing',
+          content,
+          timestamp: new Date().toISOString(),
+          status: 'sent'
+        };
+
+        if (!chatState.messages[chatState.currentContact.id]) {
+          chatState.messages[chatState.currentContact.id] = [];
+        }
+        chatState.messages[chatState.currentContact.id].push(newMessage);
+
+        renderMessages();
+        scrollToMessageBottom();
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        alert('Failed to send message: ' + err.message);
+      }
+    }
+
+    // Format Message Time
+    function formatMessageTime(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+
+      if (isToday) {
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+    }
+
+    // Get Message Status Icon
+    function getMessageStatusIcon(status) {
+      const icons = {
+        sent: '✓',
+        delivered: '✓✓',
+        read: '✓✓',
+        failed: '✗'
+      };
+      return icons[status] || '?';
+    }
+
+    // Scroll to Bottom
+    function scrollToMessageBottom() {
+      const container = document.getElementById('messagesContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Socket.io Event Handlers for Chat
+    socket.on('chat.newMessage', (data) => {
+      const { sessionId, message, contact } = data;
+
+      // Update contacts if in same session
+      if (sessionId === chatState.currentSession) {
+        // Add/update contact
+        chatState.contacts[contact.id] = contact;
+
+        // Add message
+        if (!chatState.messages[contact.id]) {
+          chatState.messages[contact.id] = [];
+        }
+        chatState.messages[contact.id].push(message);
+
+        // If this is the current chat, render
+        if (chatState.currentContact?.id === contact.id) {
+          renderMessages();
+          scrollToMessageBottom();
+        }
+
+        // Update contacts list
+        renderChatContactsList();
+      }
+    });
+
+    // Handle history sync completion
+    socket.on('chat.historySync', async (data) => {
+      const { sessionId, updatedContactIds, stats } = data;
+
+      console.log('📚 History sync completed:', stats);
+
+      // Update contacts list if in same session
+      if (sessionId === chatState.currentSession) {
+        // Reload all contacts to get updated data
+        await loadChatContacts(sessionId);
+
+        // If current chat was updated, reload messages
+        if (chatState.currentContact && updatedContactIds.includes(chatState.currentContact.id)) {
+          await loadContactMessages(chatState.currentContact.id);
+          renderMessages();
+          scrollToMessageBottom();
+        }
+      }
+    });
+
+    // Chat Event Listeners
+    document.getElementById('chatSessionSelect')?.addEventListener('change', (e) => {
+      chatState.currentSession = e.target.value;
+      loadChatContacts(chatState.currentSession);
+    });
+
+    let searchTimeout;
+    document.getElementById('chatSearchInput')?.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        loadChatContacts(chatState.currentSession, e.target.value);
+      }, 300);
+    });
+
+    document.getElementById('sendMessageBtn')?.addEventListener('click', sendMessage);
+
+    document.getElementById('messageInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Auto-resize textarea
+    document.getElementById('messageInput')?.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    });
+
+    // View Contact Details
+    document.getElementById('viewContactBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+      }
+    });
+
+    // Sync Chat History
+    document.getElementById('refreshChatBtn')?.addEventListener('click', async () => {
+      if (!chatState.currentContact || !chatState.currentSession) {
+        alert('Please select a contact first');
+        return;
+      }
+
+      const btn = document.getElementById('refreshChatBtn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳';
+      btn.title = 'Syncing...';
+
+      try {
+        const data = await postJson('/api/contacts/' + chatState.currentContact.id + '/sync-history', {
+          sessionId: chatState.currentSession
+        });
+
+        if (data.success) {
+          // Reload messages for this contact
+          await loadContactMessages(chatState.currentContact.id);
+
+          // Show result
+          alert(`✓ Sync complete!\n\n${data.synced} new messages synced\n${data.skipped} duplicates skipped`);
+        }
+      } catch (err) {
+        console.error('Failed to sync history:', err);
+        alert('Failed to sync chat history: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.title = 'Refresh';
+      }
+    });
+
+    // CRM Quick Actions - Update Status
+    document.getElementById('updateStatusBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on status dropdown in modal after it opens
+        setTimeout(() => {
+          const statusSelect = document.getElementById('modalLeadStatusSelect');
+          if (statusSelect) statusSelect.focus();
+        }, 300);
+      }
+    });
+
+    // CRM Quick Actions - Add Tag
+    document.getElementById('addTagBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on tag input in modal after it opens
+        setTimeout(() => {
+          const tagInput = document.getElementById('modalTagInput');
+          if (tagInput) tagInput.focus();
+        }, 300);
+      }
+    });
+
+    // CRM Quick Actions - Add Note
+    document.getElementById('addNoteBtn')?.addEventListener('click', () => {
+      if (chatState.currentContact) {
+        showContactDetailModal(chatState.currentContact.id);
+        // Focus on note input in modal after it opens
+        setTimeout(() => {
+          const noteInput = document.getElementById('modalNoteInput');
+          if (noteInput) noteInput.focus();
+        }, 300);
+      }
+    });
+
+    // ============================================
+    // CRM FUNCTIONS
+    // ============================================
+
+    const crmState = {
+      currentSession: null,
+      filters: {
+        search: '',
+        statusId: '',
+        tagIds: []
+      },
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 0,
+        totalPages: 0
+      }
+    };
+
+    // Load CRM Data
+    async function loadCRMData(sessionId) {
+      if (!sessionId) return;
+
+      crmState.currentSession = sessionId;
+      await Promise.all([
+        loadCRMContacts(sessionId),
+        loadCRMTags(sessionId),
+        loadCRMLeadStatuses(sessionId)
+      ]);
+
+      // Check Google connection
+      checkGoogleConnection();
+    }
+
+    // Load CRM Contacts
+    async function loadCRMContacts(sessionId) {
+      try {
+        const params = new URLSearchParams({
+          sessionId,
+          page: crmState.pagination.page,
+          limit: crmState.pagination.limit,
+          ...crmState.filters
+        });
+
+        const res = await fetch(`/api/contacts?${params}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          // Update pagination state
+          if (data.pagination) {
+            crmState.pagination = {
+              page: data.pagination.page,
+              limit: data.pagination.limit,
+              total: data.pagination.total,
+              totalPages: data.pagination.totalPages
+            };
+          }
+          renderCRMContacts(data.contacts);
+          renderPagination();
+        }
+      } catch (err) {
+        console.error('Failed to load CRM contacts:', err);
+      }
+    }
+
+    // Load CRM Tags
+    async function loadCRMTags(sessionId) {
+      try {
+        const res = await fetch(`/api/tags?sessionId=${sessionId}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          chatState.tags = {};
+          data.tags.forEach(tag => {
+            chatState.tags[tag.id] = tag;
+          });
+
+          renderCRMTagFilters();
+        }
+      } catch (err) {
+        console.error('Failed to load tags:', err);
+      }
+    }
+
+    // Load CRM Lead Statuses
+    async function loadCRMLeadStatuses(sessionId) {
+      try {
+        const res = await fetch(`/api/lead-statuses?sessionId=${sessionId}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          chatState.leadStatuses = {};
+          data.statuses.forEach(status => {
+            chatState.leadStatuses[status.id] = status;
+          });
+
+          renderCRMStatusFilters();
+        }
+      } catch (err) {
+        console.error('Failed to load lead statuses:', err);
+      }
+    }
+
+    // Render CRM Contacts
+    function renderCRMContacts(contacts) {
+      const gridDiv = document.getElementById('crmContactsCards');
+      const { page, limit, total, totalPages } = crmState.pagination;
+
+      // Show range and total
+      const start = total === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, total);
+      document.getElementById('crmContactCount').textContent = `Showing ${start}-${end} of ${total} contacts`;
+
+      if (contacts.length === 0) {
+        gridDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 40px;">No contacts found</div>';
+        return;
+      }
+
+      gridDiv.innerHTML = contacts.map(contact => {
+        const status = chatState.leadStatuses[contact.leadStatusId];
+        const tags = (contact.tagIds || []).map(tagId => chatState.tags[tagId]).filter(Boolean);
+
+        return `
+          <div class="contact-card" data-contact-id="${contact.id}">
+            <div class="contact-card-header">
+              <div class="contact-card-avatar">${contact.name ? contact.name[0] : '?'}</div>
+              <div class="contact-card-info">
+                <div class="contact-card-name">${contact.name || contact.phone}</div>
+                <div class="contact-card-phone">${contact.phone}</div>
+              </div>
+            </div>
+            <div class="contact-card-tags">
+              ${status ? `<span class="lead-status-badge" style="background: ${status.color}20; color: ${status.color}">${status.name}</span>` : ''}
+              ${tags.map(tag => `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}">${tag.name}</span>`).join('')}
+            </div>
+            <div class="contact-card-meta">
+              <span>Last interaction: ${contact.lastInteraction ? formatDate(contact.lastInteraction) : 'Never'}</span>
+              <span>${contact.messageCount || 0} messages</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Add click handlers
+      gridDiv.querySelectorAll('.contact-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const contactId = parseInt(card.dataset.contactId);
+          showContactDetailModal(contactId);
+        });
+      });
+    }
+
+    // Render Pagination
+    function renderPagination() {
+      const { page, limit, total, totalPages } = crmState.pagination;
+      const container = document.getElementById('crmPagination');
+
+      if (!container) return;
+
+      // Hide pagination if only 1 page or no contacts
+      if (totalPages <= 1) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'flex';
+
+      // Build page numbers (show max 5 page numbers)
+      let pageNumbers = [];
+      const maxVisible = 5;
+      let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+      if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      container.innerHTML = `
+        <button class="pagination-btn" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">
+          ‹ Previous
+        </button>
+        ${startPage > 1 ? '<span class="pagination-ellipsis">...</span>' : ''}
+        ${pageNumbers.map(p => `
+          <button class="pagination-btn ${p === page ? 'active' : ''}" data-page="${p}">
+            ${p}
+          </button>
+        `).join('')}
+        ${endPage < totalPages ? '<span class="pagination-ellipsis">...</span>' : ''}
+        <button class="pagination-btn" ${page === totalPages ? 'disabled' : ''} data-page="${page + 1}">
+          Next ›
+        </button>
+      `;
+
+      // Add click handlers
+      container.querySelectorAll('.pagination-btn').forEach(btn => {
+        if (!btn.disabled) {
+          btn.addEventListener('click', () => {
+            const newPage = parseInt(btn.dataset.page);
+            crmState.pagination.page = newPage;
+            loadCRMContacts(crmState.currentSession);
+          });
+        }
+      });
+    }
+
+    // Go to specific page
+    function goToPage(pageNum) {
+      const { totalPages } = crmState.pagination;
+      if (pageNum < 1 || pageNum > totalPages) return;
+      crmState.pagination.page = pageNum;
+      loadCRMContacts(crmState.currentSession);
+    }
+
+    // Reset to first page (called when filters change)
+    function resetPagination() {
+      crmState.pagination.page = 1;
+    }
+
+    // Render Tag Filters
+    function renderCRMTagFilters() {
+      const container = document.getElementById('crmTagsFilter');
+      const tags = Object.values(chatState.tags);
+
+      if (tags.length === 0) {
+        container.innerHTML = '<div style="color: var(--muted); font-size: 13px;">No tags</div>';
+        return;
+      }
+
+      container.innerHTML = tags.map(tag => `
+        <label class="tag-checkbox">
+          <input type="checkbox" value="${tag.id}" data-tag-name="${tag.name}">
+          <span style="color: ${tag.color}">${tag.name}</span>
+        </label>
+      `).join('');
+
+      // Add change handlers
+      container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+          crmState.filters.tagIds = Array.from(container.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+          resetPagination();
+          loadCRMContacts(crmState.currentSession);
+        });
+      });
+    }
+
+    // Render Status Filters
+    function renderCRMStatusFilters() {
+      const select = document.getElementById('crmStatusFilter');
+      const statuses = Object.values(chatState.leadStatuses);
+
+      select.innerHTML = '<option value="">All Statuses</option>' +
+        statuses.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+      select.addEventListener('change', (e) => {
+        crmState.filters.statusId = e.target.value;
+        resetPagination();
+        loadCRMContacts(crmState.currentSession);
+      });
+    }
+
+    // Contact Detail Modal
+    async function showContactDetailModal(contactId) {
+      const modal = document.getElementById('contactDetailModal');
+      modal.classList.add('active');
+
+      try {
+        const res = await fetch(`/api/contacts/${contactId}?sessionId=${crmState.currentSession}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          renderContactDetailModal(data.contact);
+        }
+      } catch (err) {
+        console.error('Failed to load contact details:', err);
+      }
+    }
+
+    // Render Contact Detail Modal
+    function renderContactDetailModal(contact) {
+      const modalBody = document.getElementById('contactDetailModalBody');
+
+      const status = chatState.leadStatuses[contact.leadStatusId];
+      const tags = contact.tags || [];
+
+      modalBody.innerHTML = `
+        <div class="contact-detail-header">
+          <div class="contact-avatar">${contact.name ? contact.name[0] : '?'}</div>
+          <h3>${contact.name || 'Unknown'}</h3>
+          <p style="color: var(--muted);">${contact.phone}</p>
+        </div>
+
+        <div class="contact-detail-section">
+          <h4>Lead Status</h4>
+          <select id="contactStatusSelect">
+            ${Object.values(chatState.leadStatuses).map(s =>
+              `<option value="${s.id}" ${s.id === contact.leadStatusId ? 'selected' : ''}>${s.name}</option>`
+            ).join('')}
+          </select>
+        </div>
+
+        <div class="contact-detail-section">
+          <h4>Tags</h4>
+          <div class="contact-tags-list">
+            ${tags.map(tag =>
+              `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}; padding: 6px 12px;">
+                ${tag.name}
+              </span>`
+            ).join('')}
+          </div>
+          <button id="addTagToContact" class="btn-sm">+ Add Tag</button>
+        </div>
+
+        <div class="contact-detail-section">
+          <h4>Notes</h4>
+          <div id="contactNotesList">
+            ${(contact.notes || []).map(note =>
+              `<div class="note-item">
+                <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">${formatDateTime(note.createdAt)}</div>
+                <div>${escapeHtml(note.content)}</div>
+              </div>`
+            ).join('')}
+          </div>
+          <textarea id="newNoteContent" placeholder="Add a note..." rows="2" style="margin-bottom: 8px;"></textarea>
+          <button id="addNoteToContact" class="btn-sm">Add Note</button>
+        </div>
+
+        <div class="modal-actions">
+          <button id="openChatFromModal" class="btn-primary">Open Chat</button>
+        </div>
+      `;
+
+      // Add event listeners
+      document.getElementById('contactStatusSelect')?.addEventListener('change', async (e) => {
+        await updateContactStatus(contact.id, e.target.value);
+      });
+
+      document.getElementById('addNoteToContact')?.addEventListener('click', async () => {
+        const content = document.getElementById('newNoteContent').value.trim();
+        if (content) {
+          await addNoteToContact(contact.id, content);
+        }
+      });
+
+      document.getElementById('openChatFromModal')?.addEventListener('click', async () => {
+        // First, ensure the contact is in chatState.contacts
+        if (!chatState.contacts[contact.id]) {
+          chatState.contacts[contact.id] = contact;
+        }
+
+        // Ensure we have the correct session set
+        if (!chatState.currentSession) {
+          chatState.currentSession = contact.sessionId;
+        }
+
+        // Close modal and navigate to chat
+        const modal = document.getElementById('contactDetailModal');
+        modal.classList.remove('active');
+        window.location.hash = 'chat';
+
+        // Wait for view to switch, then open chat
+        setTimeout(() => {
+          openChatContact(contact.id);
+        }, 200);
+      });
+    }
+
+    // Update Contact Status
+    async function updateContactStatus(contactId, statusId) {
+      try {
+        const res = await fetch(`/api/contacts/${contactId}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: crmState.currentSession, statusId })
+        });
+
+        if (res.ok) {
+          alert('Status updated!');
+          loadCRMContacts(crmState.currentSession);
+        }
+      } catch (err) {
+        console.error('Failed to update status:', err);
+        alert('Failed to update status');
+      }
+    }
+
+    // Add Note to Contact
+    async function addNoteToContact(contactId, content) {
+      try {
+        const res = await fetch(`/api/contacts/${contactId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: crmState.currentSession, content })
+        });
+
+        if (res.ok) {
+          document.getElementById('newNoteContent').value = '';
+          showContactDetailModal(contactId); // Reload modal
+        }
+      } catch (err) {
+        console.error('Failed to add note:', err);
+        alert('Failed to add note');
+      }
+    }
+
+    // Format Date
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    // Format DateTime
+    function formatDateTime(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // ============================================
+    // GOOGLE CONTACTS INTEGRATION
+    // ============================================
+
+    // Check Google Connection Status
+    async function checkGoogleConnection() {
+      if (!crmState.currentSession) return;
+
+      try {
+        const res = await fetch(`/api/google/sync-status?sessionId=${crmState.currentSession}`);
+        const data = await res.json();
+
+        if (data.connected) {
+          document.getElementById('googleStatus').style.display = 'flex';
+          document.getElementById('googleNotConnected').style.display = 'none';
+        } else {
+          document.getElementById('googleStatus').style.display = 'none';
+          document.getElementById('googleNotConnected').style.display = 'flex';
+        }
+      } catch (err) {
+        console.error('Failed to check Google connection:', err);
+      }
+    }
+
+    // Connect to Google
+    document.getElementById('connectGoogleBtn')?.addEventListener('click', () => {
+      window.location.href = '/auth/google';
+    });
+
+    // Disconnect Google
+    document.getElementById('disconnectGoogleBtn')?.addEventListener('click', async () => {
+      if (!crmState.currentSession) return;
+
+      try {
+        const res = await fetch('/api/google/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: crmState.currentSession })
+        });
+
+        if (res.ok) {
+          checkGoogleConnection();
+        }
+      } catch (err) {
+        console.error('Failed to disconnect Google:', err);
+      }
+    });
+
+    // Sync Google Contacts
+    document.getElementById('syncGoogleBtn')?.addEventListener('click', async () => {
+      if (!crmState.currentSession) {
+        alert('Please select a session first');
+        return;
+      }
+
+      const btn = document.getElementById('syncGoogleBtn');
+      btn.disabled = true;
+      btn.textContent = '🔄 Syncing...';
+
+      try {
+        const res = await fetch('/api/google/sync-contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: crmState.currentSession })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          alert(`Successfully synced ${data.synced} new contacts, ${data.merged} merged!`);
+          await loadCRMContacts(crmState.currentSession);
+        } else {
+          alert('Failed to sync: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        console.error('Failed to sync Google contacts:', err);
+        alert('Failed to sync Google contacts: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📇 Sync Google Contacts';
+      }
+    });
+
+    // Sync WhatsApp Contacts
+    document.getElementById('syncWhatsAppBtn')?.addEventListener('click', async () => {
+      if (!crmState.currentSession) {
+        alert('Please select a session first');
+        return;
+      }
+
+      const btn = document.getElementById('syncWhatsAppBtn');
+      btn.disabled = true;
+      btn.textContent = '📱 Syncing...';
+
+      try {
+        const res = await fetch('/api/whatsapp/sync-contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: crmState.currentSession })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          alert(`Successfully synced ${data.synced || 0} new contacts, ${data.updated || 0} updated!`);
+          await loadCRMContacts(crmState.currentSession);
+        } else {
+          alert('Failed to sync: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        console.error('Failed to sync WhatsApp contacts:', err);
+        alert('Failed to sync WhatsApp contacts: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📱 Sync WhatsApp';
+      }
+    });
+
+    // Socket.io event for Google sync completion
+    socket.on('google.contactsSynced', (data) => {
+      console.log(`Synced ${data.count} contacts from Google`);
+      if (data.sessionId === crmState.currentSession) {
+        loadCRMContacts(data.sessionId);
+      }
+    });
+
+    // CRM Session Select
+    document.getElementById('crmSessionSelect')?.addEventListener('change', (e) => {
+      loadCRMData(e.target.value);
+    });
+
+    // CRM Search
+    let crmSearchTimeout;
+    document.getElementById('crmSearchInput')?.addEventListener('input', (e) => {
+      clearTimeout(crmSearchTimeout);
+      crmSearchTimeout = setTimeout(() => {
+        crmState.filters.search = e.target.value;
+        resetPagination();
+        loadCRMContacts(crmState.currentSession);
+      }, 300);
+    });
+
+    // Close Modal
+    document.getElementById('closeContactModal')?.addEventListener('click', () => {
+      document.getElementById('contactDetailModal').classList.remove('active');
+    });
+
+    document.getElementById('contactDetailModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'contactDetailModal') {
+        e.target.classList.remove('active');
+      }
+    });
+
+    // Update existing updateAllSessionSelects function to include new selectors
+    const originalUpdateAllSessionSelects = window.updateAllSessionSelects;
+    if (typeof originalUpdateAllSessionSelects === 'function') {
+      window.updateAllSessionSelects = function() {
+        originalUpdateAllSessionSelects();
+
+        // Update chat and CRM session selectors
+        const newSelects = ['chatSessionSelect', 'crmSessionSelect'];
+        newSelects.forEach(selectId => {
+          const select = document.getElementById(selectId);
+          if (select) {
+            select.innerHTML = '<option value="">Select Session...</option>';
+            Object.values(state.sessions).forEach(s => {
+              const option = document.createElement('option');
+              option.value = s.id;
+              option.textContent = s.id + (s.user?.name ? ` (${s.user.name})` : '');
+              select.appendChild(option);
+            });
+
+            // Set default value if active session exists
+            if (state.activeSession) {
+              select.value = state.activeSession;
+            }
+          }
+        });
+
+        // Initialize chat and CRM with active session
+        if (state.activeSession) {
+          chatState.currentSession = state.activeSession;
+          crmState.currentSession = state.activeSession;
+          loadChatContacts(state.activeSession);
+          loadCRMData(state.activeSession);
+        }
+      };
+    }
+
+    // Enhance existing navigation to handle chat and contacts views
+    const originalNavigateTo = window.navigateTo;
+    if (typeof originalNavigateTo === 'function') {
+      window.navigateTo = function(viewId) {
+        originalNavigateTo(viewId);
+
+        // Load data when navigating to chat or contacts
+        if (viewId === 'chat' && chatState.currentSession) {
+          loadChatContacts(chatState.currentSession);
+        } else if (viewId === 'contacts' && crmState.currentSession) {
+          loadCRMData(crmState.currentSession);
+        }
+      };
+    }
   </script>
 </body>
 </html>
