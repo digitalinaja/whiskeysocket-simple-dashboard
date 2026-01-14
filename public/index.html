@@ -3040,23 +3040,18 @@
       }
 
       try {
-        const res = await postJson('/api/chat/send', {
+        const data = await postJson('/api/chat/send', {
           sessionId: chatState.currentSession,
           phone: chatState.currentContact.phone,
           content,
           type: 'text'
         });
 
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error);
-        }
-
+        // postJson throws error if not ok, so if we get here, it succeeded
         input.value = '';
         input.style.height = 'auto'; // Reset height
 
         // Add message to local state
-        const data = await res.json();
         const newMessage = {
           id: data.message.id,
           direction: 'outgoing',
