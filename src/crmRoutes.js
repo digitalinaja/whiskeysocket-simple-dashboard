@@ -9,13 +9,47 @@ const chatHandlers = require('./chatHandlers');
  */
 router.get('/contacts', async (req, res) => {
   try {
-    const { sessionId, search, limit = 20, statusId, tagId } = req.query;
+    const { sessionId, search, limit = 50, page = 1, statusId, tagId } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
     const connection = getPool();
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const limitVal = parseInt(limit);
+
+    // Build WHERE clause
+    let whereClause = `WHERE c.session_id = ?`;
+    const params = [sessionId];
+
+    if (search) {
+      whereClause += ` AND (c.name LIKE ? OR c.phone LIKE ?)`;
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam);
+    }
+
+    if (statusId) {
+      whereClause += ` AND c.lead_status_id = ?`;
+      params.push(statusId);
+    }
+
+    if (tagId) {
+      whereClause += ` AND c.id IN (SELECT contact_id FROM contact_tags WHERE tag_id = ?)`;
+      params.push(tagId);
+    }
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(DISTINCT c.id) as total
+      FROM contacts c
+      LEFT JOIN lead_statuses ls ON c.lead_status_id = ls.id
+      ${whereClause}
+    `;
+    const [countResult] = await connection.query(countQuery, params);
+    const total = countResult[0].total;
+
+    // Get contacts with pagination
     let query = `
       SELECT DISTINCT
         c.*,
@@ -26,30 +60,15 @@ router.get('/contacts', async (req, res) => {
         (SELECT GROUP_CONCAT(t.id) FROM contact_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.contact_id = c.id) as tag_ids
       FROM contacts c
       LEFT JOIN lead_statuses ls ON c.lead_status_id = ls.id
-      WHERE c.session_id = ?
+      ${whereClause}
+      ORDER BY c.last_interaction_at DESC
+      LIMIT ? OFFSET ?
     `;
-    const params = [sessionId];
-
-    if (search) {
-      query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`;
-      const searchParam = `%${search}%`;
-      params.push(searchParam, searchParam);
-    }
-
-    if (statusId) {
-      query += ` AND c.lead_status_id = ?`;
-      params.push(statusId);
-    }
-
-    if (tagId) {
-      query += ` AND c.id IN (SELECT contact_id FROM contact_tags WHERE tag_id = ?)`;
-      params.push(tagId);
-    }
-
-    query += ` ORDER BY c.last_interaction_at DESC LIMIT ?`;
-    params.push(parseInt(limit));
+    params.push(limitVal, offset);
 
     const [contacts] = await connection.query(query, params);
+
+    const totalPages = Math.ceil(total / limitVal);
 
     res.json({
       contacts: contacts.map(c => ({
@@ -72,7 +91,15 @@ router.get('/contacts', async (req, res) => {
           content: c.last_message_content,
           timestamp: c.last_message_time
         }
-      }))
+      })),
+      pagination: {
+        page: parseInt(page),
+        limit: limitVal,
+        total,
+        totalPages,
+        hasNext: parseInt(page) < totalPages,
+        hasPrev: parseInt(page) > 1
+      }
     });
   } catch (error) {
     console.error('Error fetching contacts:', error);

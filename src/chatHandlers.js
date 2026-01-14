@@ -1,14 +1,26 @@
 const { getPool, createDefaultLeadStatuses } = require('./database');
 
 /**
- * Validate and normalize phone number
- * Returns normalized phone or null if invalid
+ * Normalize phone number to international format
+ * - Removes all non-digit characters
+ * - For Indonesian numbers starting with 0: removes 0 and adds 62
+ * - Returns normalized international format or null if invalid
  */
-function validateAndNormalizePhone(phone) {
+function normalizePhoneNumber(phone, defaultCountryCode = '62') {
   if (!phone) return null;
 
   // Remove all non-digit characters
-  const digitsOnly = phone.replace(/\D/g, '');
+  let digitsOnly = phone.replace(/\D/g, '');
+
+  // Skip empty numbers
+  if (!digitsOnly || digitsOnly.length === 0) return null;
+
+  // Handle Indonesian format: if starts with 0, replace with default country code
+  // Example: 08388105401 -> 628388105401
+  if (digitsOnly.startsWith('0')) {
+    digitsOnly = defaultCountryCode + digitsOnly.substring(1);
+    console.log(`📱 Normalized phone: ${phone} -> ${digitsOnly}`);
+  }
 
   // Validate length: WhatsApp numbers are typically 10-15 digits
   if (digitsOnly.length < 10 || digitsOnly.length > 15) {
@@ -16,12 +28,14 @@ function validateAndNormalizePhone(phone) {
     return null;
   }
 
-  // Skip obviously invalid numbers
-  // Country code 27 = South Africa, but user is from Indonesia (62)
-  // If you see numbers with wrong country codes, you can add validation here
-  // For now, just check if it's a reasonable format
-
   return digitsOnly;
+}
+
+/**
+ * Validate and normalize phone number (alias for compatibility)
+ */
+function validateAndNormalizePhone(phone) {
+  return normalizePhoneNumber(phone);
 }
 
 /**
@@ -199,6 +213,16 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
   try {
     console.log(`🔍 Looking for contact: phone=${phone}, sessionId=${sessionId}, name=${name}, useLidWorkaround=${useLidWorkaround}`);
 
+    // Normalize phone number to international format
+    const normalizedPhone = normalizePhoneNumber(phone);
+    if (!normalizedPhone) {
+      console.warn(`⚠️ Invalid phone number, cannot create contact: ${phone}`);
+      // For @lid workaround without valid phone, still try to match by name
+      if (!useLidWorkaround || !name) {
+        throw new Error(`Invalid phone number: ${phone}`);
+      }
+    }
+
     // STRATEGY 1: If this is a @lid message (invalid JID from other device), try to match by name first
     if (useLidWorkaround && name) {
       console.log(`🔍 Using @lid workaround - searching by name: ${name}`);
@@ -212,24 +236,24 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
         const contact = contactsByName[0];
         console.log(`✅ Found contact by NAME for @lid message: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
-        // Update phone if the existing contact has a more valid phone
-        if (contact.phone.length < phone.length) {
+        // Update phone if we have a normalized phone and existing contact has invalid/short phone
+        if (normalizedPhone && (!contact.phone || contact.phone.length < normalizedPhone.length)) {
           await connection.query(
             `UPDATE contacts SET phone = ? WHERE id = ?`,
-            [phone, contact.id]
+            [normalizedPhone, contact.id]
           );
-          contact.phone = phone;
-          console.log(`📝 Updated contact phone to: ${phone}`);
+          contact.phone = normalizedPhone;
+          console.log(`📝 Updated contact phone to: ${normalizedPhone}`);
         }
 
         return contact;
       }
     }
 
-    // STRATEGY 2: Try to find by phone number (normal behavior)
+    // STRATEGY 2: Try to find by phone number (normal behavior) - use normalized phone
     const [contacts] = await connection.query(
       `SELECT * FROM contacts WHERE session_id = ? AND phone = ?`,
-      [sessionId, phone]
+      [sessionId, normalizedPhone]
     );
 
     if (contacts.length > 0) {
@@ -251,18 +275,18 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
 
     // STRATEGY 3: For @lid messages with name, create new contact but mark it for potential merge
     if (useLidWorkaround && name) {
-      console.log(`➕ Creating new contact from @lid message: phone=${phone}, name=${name}`);
+      console.log(`➕ Creating new contact from @lid message: phone=${normalizedPhone || phone}, name=${name}`);
 
       const [result] = await connection.query(
         `INSERT INTO contacts (session_id, phone, name, push_name, source)
          VALUES (?, ?, ?, ?, 'whatsapp')`,
-        [sessionId, phone, name, name]
+        [sessionId, normalizedPhone || phone, name, name]
       );
 
       const newContact = {
         id: result.insertId,
-        phone,
-        name: name || phone,
+        phone: normalizedPhone || phone,
+        name: name || normalizedPhone || phone,
         source: 'whatsapp'
       };
 
@@ -272,17 +296,17 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
     }
 
     // STRATEGY 4: Normal contact creation
-    console.log(`➕ Creating new contact: phone=${phone}, name=${name}`);
+    console.log(`➕ Creating new contact: phone=${normalizedPhone}, name=${name}`);
     const [result] = await connection.query(
       `INSERT INTO contacts (session_id, phone, name, push_name, source)
        VALUES (?, ?, ?, ?, 'whatsapp')`,
-      [sessionId, phone, name || phone, name]
+      [sessionId, normalizedPhone, name || normalizedPhone, name]
     );
 
     const newContact = {
       id: result.insertId,
-      phone,
-      name: name || phone,
+      phone: normalizedPhone,
+      name: name || normalizedPhone,
       source: 'whatsapp'
     };
 
@@ -302,12 +326,16 @@ async function sendMessage(sessionId, sock, phone, content, messageType = 'text'
   const connection = getPool();
 
   try {
-    // Normalize phone number
-    const normalizedPhone = phone.replace(/\D/g, '');
+    // Normalize phone number for consistency
+    const normalizedPhone = normalizePhoneNumber(phone);
+    if (!normalizedPhone) {
+      throw new Error(`Invalid phone number: ${phone}`);
+    }
+
     const jid = `${normalizedPhone}@s.whatsapp.net`;
 
-    // Get or create contact
-    const contact = await getOrCreateContact(sessionId, phone);
+    // Get or create contact (will normalize again internally, which is fine)
+    const contact = await getOrCreateContact(sessionId, normalizedPhone);
 
     // Send message via Baileys
     const sentMessage = await sock.sendMessage(jid, { text: content });
@@ -444,10 +472,18 @@ async function syncContactsFromWhatsApp(sessionId, sock) {
       // Skip non-user JIDs (groups, broadcasts, etc.)
       if (!jid.endsWith('@s.whatsapp.net')) continue;
 
-      const phone = jid.split('@')[0];
+      // Extract phone from JID and normalize (WhatsApp JIDs are already international format)
+      const rawPhone = jid.split('@')[0];
+      const phone = normalizePhoneNumber(rawPhone);
+
+      if (!phone) {
+        console.log(`⚠️ Skipping invalid WhatsApp JID: ${jid}`);
+        continue;
+      }
+
       const name = contact.name || contact.notify || contact.verifiedName || null;
 
-      // Check if contact exists
+      // Check if contact exists (using normalized phone)
       const [existing] = await connection.query(
         `SELECT id FROM contacts WHERE session_id = ? AND phone = ?`,
         [sessionId, phone]
@@ -741,5 +777,7 @@ module.exports = {
   syncContactsFromWhatsApp,
   syncContactHistory,
   updateMessageStatus,
-  getMessageType
+  getMessageType,
+  normalizePhoneNumber,
+  validateAndNormalizePhone
 };

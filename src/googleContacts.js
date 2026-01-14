@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const { getPool } = require('./database');
+const { normalizePhoneNumber } = require('./chatHandlers');
 
 // OAuth2 client configuration
 function getOAuth2Client() {
@@ -195,13 +196,18 @@ async function syncContactsFromGoogle(sessionId) {
 
       const name = gc.names[0].displayName || 'Unknown';
       const phoneNumbers = gc.phoneNumbers || [];
-      const primaryPhone = phoneNumbers.length > 0
-        ? phoneNumbers[0].value?.replace(/\D/g, '')
-        : null;
+      const rawPhone = phoneNumbers.length > 0 ? phoneNumbers[0].value : null;
 
-      if (!primaryPhone) continue; // Skip contacts without phone numbers
+      if (!rawPhone) continue; // Skip contacts without phone numbers
 
-      // Check if contact exists by phone
+      // Normalize phone number to international format
+      const primaryPhone = normalizePhoneNumber(rawPhone);
+      if (!primaryPhone) {
+        console.log(`⚠️ Skipping invalid phone: ${rawPhone}`);
+        continue;
+      }
+
+      // Check if contact exists by phone (normalized)
       const [existing] = await connection.query(
         `SELECT * FROM contacts WHERE session_id = ? AND phone = ?`,
         [sessionId, primaryPhone]

@@ -1068,6 +1068,50 @@
       color: var(--muted);
     }
 
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+      min-width: 40px;
+      height: 40px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .pagination-btn:hover:not(:disabled):not(.active) {
+      background: var(--panel-light);
+      border-color: var(--primary);
+    }
+
+    .pagination-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-ellipsis {
+      color: var(--muted);
+      padding: 0 8px;
+    }
+
     /* Modal */
     .modal {
       display: none;
@@ -1803,6 +1847,7 @@
               Loading contacts...
             </div>
           </div>
+          <div class="pagination" id="crmPagination" style="display: none;"></div>
         </div>
       </div>
     </div>
@@ -1840,7 +1885,7 @@
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
       // Update nav items (only for main nav items)
-      if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs'].includes(viewId)) {
+      if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'contacts'].includes(viewId)) {
         document.querySelectorAll('.nav-item').forEach(item => {
           item.classList.remove('active');
           if (item.dataset.view === viewId) {
@@ -3278,6 +3323,12 @@
         search: '',
         statusId: '',
         tagIds: []
+      },
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 0,
+        totalPages: 0
       }
     };
 
@@ -3301,6 +3352,8 @@
       try {
         const params = new URLSearchParams({
           sessionId,
+          page: crmState.pagination.page,
+          limit: crmState.pagination.limit,
           ...crmState.filters
         });
 
@@ -3308,7 +3361,17 @@
         const data = await res.json();
 
         if (res.ok) {
+          // Update pagination state
+          if (data.pagination) {
+            crmState.pagination = {
+              page: data.pagination.page,
+              limit: data.pagination.limit,
+              total: data.pagination.total,
+              totalPages: data.pagination.totalPages
+            };
+          }
           renderCRMContacts(data.contacts);
+          renderPagination();
         }
       } catch (err) {
         console.error('Failed to load CRM contacts:', err);
@@ -3356,7 +3419,12 @@
     // Render CRM Contacts
     function renderCRMContacts(contacts) {
       const gridDiv = document.getElementById('crmContactsCards');
-      document.getElementById('crmContactCount').textContent = `${contacts.length} contacts`;
+      const { page, limit, total, totalPages } = crmState.pagination;
+
+      // Show range and total
+      const start = total === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, total);
+      document.getElementById('crmContactCount').textContent = `Showing ${start}-${end} of ${total} contacts`;
 
       if (contacts.length === 0) {
         gridDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 40px;">No contacts found</div>';
@@ -3397,6 +3465,76 @@
       });
     }
 
+    // Render Pagination
+    function renderPagination() {
+      const { page, limit, total, totalPages } = crmState.pagination;
+      const container = document.getElementById('crmPagination');
+
+      if (!container) return;
+
+      // Hide pagination if only 1 page or no contacts
+      if (totalPages <= 1) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'flex';
+
+      // Build page numbers (show max 5 page numbers)
+      let pageNumbers = [];
+      const maxVisible = 5;
+      let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+      if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      container.innerHTML = `
+        <button class="pagination-btn" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">
+          ‹ Previous
+        </button>
+        ${startPage > 1 ? '<span class="pagination-ellipsis">...</span>' : ''}
+        ${pageNumbers.map(p => `
+          <button class="pagination-btn ${p === page ? 'active' : ''}" data-page="${p}">
+            ${p}
+          </button>
+        `).join('')}
+        ${endPage < totalPages ? '<span class="pagination-ellipsis">...</span>' : ''}
+        <button class="pagination-btn" ${page === totalPages ? 'disabled' : ''} data-page="${page + 1}">
+          Next ›
+        </button>
+      `;
+
+      // Add click handlers
+      container.querySelectorAll('.pagination-btn').forEach(btn => {
+        if (!btn.disabled) {
+          btn.addEventListener('click', () => {
+            const newPage = parseInt(btn.dataset.page);
+            crmState.pagination.page = newPage;
+            loadCRMContacts(crmState.currentSession);
+          });
+        }
+      });
+    }
+
+    // Go to specific page
+    function goToPage(pageNum) {
+      const { totalPages } = crmState.pagination;
+      if (pageNum < 1 || pageNum > totalPages) return;
+      crmState.pagination.page = pageNum;
+      loadCRMContacts(crmState.currentSession);
+    }
+
+    // Reset to first page (called when filters change)
+    function resetPagination() {
+      crmState.pagination.page = 1;
+    }
+
     // Render Tag Filters
     function renderCRMTagFilters() {
       const container = document.getElementById('crmTagsFilter');
@@ -3418,6 +3556,7 @@
       container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
         checkbox.addEventListener('change', () => {
           crmState.filters.tagIds = Array.from(container.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+          resetPagination();
           loadCRMContacts(crmState.currentSession);
         });
       });
@@ -3433,6 +3572,7 @@
 
       select.addEventListener('change', (e) => {
         crmState.filters.statusId = e.target.value;
+        resetPagination();
         loadCRMContacts(crmState.currentSession);
       });
     }
@@ -3736,6 +3876,7 @@
       clearTimeout(crmSearchTimeout);
       crmSearchTimeout = setTimeout(() => {
         crmState.filters.search = e.target.value;
+        resetPagination();
         loadCRMContacts(crmState.currentSession);
       }, 300);
     });
