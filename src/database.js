@@ -1,0 +1,236 @@
+const mysql = require('mysql2/promise');
+require('dotenv').config();
+
+// Connection pool configuration for TiDB Cloud
+const poolConfig = {
+  host: process.env.TIDB_HOST || 'gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com',
+  port: process.env.TIDB_PORT || 4000,
+  user: process.env.TIDB_USER,
+  password: process.env.TIDB_PASSWORD,
+  database: process.env.TIDB_DATABASE || 'whiskeysocket_crm',
+  ssl: {
+    minVersion: 'TLSv1.2',
+    rejectUnauthorized: true
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
+};
+
+let pool = null;
+
+/**
+ * Get or create MySQL connection pool
+ */
+function getPool() {
+  if (!pool) {
+    pool = mysql.createPool(poolConfig);
+    console.log('MySQL connection pool created');
+  }
+  return pool;
+}
+
+/**
+ * Initialize database tables
+ */
+async function initDatabase() {
+  const connection = await getPool().getConnection();
+
+  try {
+    console.log('Initializing database tables...');
+
+    // Create contacts table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        name VARCHAR(255),
+        profile_pic_url TEXT,
+        push_name VARCHAR(255),
+        is_business BOOLEAN DEFAULT FALSE,
+        is_blocked BOOLEAN DEFAULT FALSE,
+        source ENUM('whatsapp', 'google', 'both') DEFAULT 'whatsapp',
+        google_contact_id VARCHAR(255) NULL,
+        lead_status_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        last_interaction_at TIMESTAMP NULL,
+        INDEX idx_session_phone (session_id, phone),
+        INDEX idx_phone (phone),
+        INDEX idx_last_interaction (last_interaction_at),
+        INDEX idx_google_contact (google_contact_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ contacts table created/verified');
+
+    // Create messages table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        contact_id INT NOT NULL,
+        message_id VARCHAR(100) NOT NULL UNIQUE,
+        direction ENUM('incoming', 'outgoing') NOT NULL,
+        message_type ENUM('text', 'image', 'video', 'audio', 'document', 'location', 'contact') DEFAULT 'text',
+        content TEXT,
+        media_url TEXT,
+        timestamp TIMESTAMP NOT NULL,
+        status ENUM('sent', 'delivered', 'read', 'failed') DEFAULT 'sent',
+        is_deleted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+        INDEX idx_session_contact (session_id, contact_id),
+        INDEX idx_message_id (message_id),
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_direction (direction)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ messages table created/verified');
+
+    // Create tags table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        name VARCHAR(50) NOT NULL,
+        color VARCHAR(7) DEFAULT '#06b6d4',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_tag_per_session (session_id, name),
+        INDEX idx_session (session_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ tags table created/verified');
+
+    // Create contact_tags junction table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS contact_tags (
+        contact_id INT NOT NULL,
+        tag_id INT NOT NULL,
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (contact_id, tag_id),
+        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+        INDEX idx_tag (tag_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ contact_tags table created/verified');
+
+    // Create lead_statuses table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS lead_statuses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        name VARCHAR(50) NOT NULL,
+        order_index INT DEFAULT 0,
+        color VARCHAR(7) DEFAULT '#94a3b8',
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_status_per_session (session_id, name),
+        INDEX idx_session (session_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ lead_statuses table created/verified');
+
+    // Create notes table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        contact_id INT NOT NULL,
+        session_id VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_by VARCHAR(255) DEFAULT 'system',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+        INDEX idx_contact (contact_id),
+        INDEX idx_session (session_id),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ notes table created/verified');
+
+    // Create google_tokens table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS google_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        token_type VARCHAR(50) DEFAULT 'Bearer',
+        expiry_date TIMESTAMP NULL,
+        scope TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_session (session_id),
+        INDEX idx_session (session_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ google_tokens table created/verified');
+
+    console.log('Database initialization completed successfully!');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Test database connection
+ */
+async function testConnection() {
+  try {
+    const connection = await getPool().getConnection();
+    await connection.ping();
+    console.log('✓ Database connection successful');
+    connection.release();
+    return true;
+  } catch (error) {
+    console.error('✗ Database connection failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Create default lead statuses for a session
+ */
+async function createDefaultLeadStatuses(sessionId) {
+  const connection = await getPool().getConnection();
+
+  try {
+    const defaultStatuses = [
+      { name: 'New Lead', color: '#22c55e', order: 1 },
+      { name: 'Contacted', color: '#06b6d4', order: 2 },
+      { name: 'Qualified', color: '#3b82f6', order: 3 },
+      { name: 'Proposal Sent', color: '#f59e0b', order: 4 },
+      { name: 'Closed Won', color: '#10b981', order: 5 },
+      { name: 'Closed Lost', color: '#ef4444', order: 6 }
+    ];
+
+    for (const status of defaultStatuses) {
+      await connection.query(
+        `INSERT IGNORE INTO lead_statuses (session_id, name, color, order_index, is_default)
+         VALUES (?, ?, ?, ?, TRUE)`,
+        [sessionId, status.name, status.color, status.order]
+      );
+    }
+
+    console.log(`✓ Default lead statuses created for session: ${sessionId}`);
+  } catch (error) {
+    console.error('Error creating default lead statuses:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+module.exports = {
+  getPool,
+  initDatabase,
+  testConnection,
+  createDefaultLeadStatuses
+};

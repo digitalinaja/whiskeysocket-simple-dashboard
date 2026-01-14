@@ -3,8 +3,13 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
+const session = require('express-session');
 const startWA = require("./baileys");
 const initSocket = require("./socket");
+const { initDatabase, testConnection, createDefaultLeadStatuses } = require("./database");
+const chatHandlers = require("./chatHandlers");
+const googleContacts = require("./googleContacts");
+const crmRoutes = require("./crmRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +20,9 @@ const JOBS_ROOT = path.join(__dirname, "..", "jobs");
 const DEFAULT_SESSION_ID = "default";
 const sessions = new Map();
 const broadcastJobs = new Map();
+
+// Store sessions in app for access by routes
+app.set('sessions', sessions);
 
 // Ensure jobs directory exists
 if (!fs.existsSync(JOBS_ROOT)) {
@@ -33,6 +41,115 @@ function randomBetween(min, max) {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
+
+// Session middleware for Google OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'whiskeysocket_session_secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true if using HTTPS
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Mount CRM API routes
+app.use('/api', crmRoutes);
+
+// Google OAuth routes
+app.get('/auth/google', (req, res) => {
+  const authUrl = googleContacts.getAuthUrl();
+  res.redirect(authUrl);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code) {
+    return res.status(400).send('Authorization failed: No code received');
+  }
+
+  try {
+    const sessionId = state || 'default';
+    await googleContacts.handleOAuthCallback(code, sessionId);
+    res.redirect('/#contacts');
+  } catch (error) {
+    console.error('Google OAuth callback error:', error);
+    res.status(500).send('Authentication failed');
+  }
+});
+
+// Google sync API routes
+app.get('/api/google/sync-status', async (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connected = await googleContacts.isConnected(sessionId);
+    res.json({ connected });
+  } catch (error) {
+    console.error('Error checking Google sync status:', error);
+    res.status(500).json({ error: 'Failed to check sync status' });
+  }
+});
+
+app.post('/api/google/sync-contacts', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const result = await googleContacts.syncContactsFromGoogle(sessionId);
+
+    // Emit Socket.io event for real-time update
+    io.emit('google.contactsSynced', { sessionId, count: result.synced + result.merged });
+
+    res.json({ success: true, synced: result.synced, merged: result.merged, total: result.total });
+  } catch (error) {
+    console.error('Error syncing Google contacts:', error);
+    res.status(500).json({ error: 'Failed to sync contacts', details: error.message });
+  }
+});
+
+app.post('/api/google/disconnect', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    await googleContacts.disconnectGoogle(sessionId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error disconnecting Google:', error);
+    res.status(500).json({ error: 'Failed to disconnect' });
+  }
+});
+
+// WhatsApp contacts sync route
+app.post('/api/whatsapp/sync-contacts', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session || !session.sock) {
+      return res.status(404).json({ error: 'Session not found or not connected' });
+    }
+
+    const result = await chatHandlers.syncContactsFromWhatsApp(sessionId, session.sock);
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error syncing WhatsApp contacts:', error);
+    res.status(500).json({ error: 'Failed to sync contacts' });
+  }
+});
 
 function normalizeNumber(input) {
   const digits = String(input || "").replace(/\D/g, "");
@@ -86,11 +203,18 @@ async function createSession(sessionId) {
       session.sock = newSock;
       session.user = newSock?.user || session.user;
     },
-    onStatusChange: (status) => {
+    onStatusChange: async (status) => {
       session.status = { ...session.status, ...status };
       if (status.state === "open" && session.sock) {
         session.user = session.sock.user || session.user;
         session.lastQR = null;
+
+        // Create default lead statuses for new sessions
+        try {
+          await createDefaultLeadStatuses(sessionId);
+        } catch (err) {
+          console.error(`Failed to create default lead statuses for ${sessionId}:`, err);
+        }
       }
       broadcastStatus(sessionId);
     },
@@ -99,6 +223,14 @@ async function createSession(sessionId) {
       session.status = { ...session.status, hasQR: true };
       broadcastStatus(sessionId);
     },
+    onMessage: async (sessionId, message) => {
+      // Handle incoming messages from WhatsApp
+      try {
+        await chatHandlers.handleIncomingMessage(sessionId, message, io);
+      } catch (error) {
+        console.error('Error handling incoming message:', error);
+      }
+    }
   });
 
   broadcastStatus(sessionId);
@@ -924,6 +1056,18 @@ app.delete("/sessions/:id", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Initialize database
+  try {
+    console.log('Initializing database...');
+    await initDatabase();
+    await testConnection();
+    console.log('✓ Database initialized successfully');
+  } catch (err) {
+    console.error('✗ Database initialization failed:', err);
+    console.log('Server will continue but database features will not work');
+  }
+
   loadExistingJobs(); // Load saved jobs from disk
   await loadExistingSessions();
 });

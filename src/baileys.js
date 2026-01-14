@@ -15,6 +15,8 @@ async function startWA({
   onSockUpdate,
   onStatusChange,
   onQR,
+  onMessage,
+  onMessageStatus,
 } = {}) {
   const {
     default: makeWASocket,
@@ -63,6 +65,35 @@ async function startWA({
     });
 
     sock.ev.on("creds.update", saveCreds);
+
+    // Handle incoming messages
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      if (type === "notify" && onMessage) {
+        for (const msg of messages) {
+          // Only process messages that are not from ourselves
+          if (!msg.key.fromMe) {
+            try {
+              await onMessage(sessionId, msg);
+            } catch (error) {
+              console.error("Error handling incoming message:", error);
+            }
+          }
+        }
+      }
+    });
+
+    // Handle message status updates (delivered, read, etc.)
+    sock.ev.on("message.update", (updates) => {
+      if (onMessageStatus) {
+        for (const update of updates) {
+          try {
+            onMessageStatus(sessionId, update);
+          } catch (error) {
+            console.error("Error handling message status update:", error);
+          }
+        }
+      }
+    });
 
     return sock;
   };
