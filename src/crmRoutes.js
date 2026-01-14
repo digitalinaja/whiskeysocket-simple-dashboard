@@ -494,4 +494,53 @@ router.delete('/notes/:noteId', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/contacts/:contactId/sync-history
+ * Sync message history for a contact from WhatsApp
+ */
+router.post('/contacts/:contactId/sync-history', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    // Get socket from sessions map
+    const sessions = req.app.get('sessions');
+    const session = sessions.get(sessionId);
+
+    if (!session || !session.sock) {
+      return res.status(404).json({ error: 'Session not found or not connected' });
+    }
+
+    // Get contact details
+    const connection = getPool();
+    const [contacts] = await connection.query(
+      `SELECT * FROM contacts WHERE id = ? AND session_id = ?`,
+      [contactId, sessionId]
+    );
+
+    if (contacts.length === 0) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    const contact = contacts[0];
+
+    // Sync history from WhatsApp
+    const result = await chatHandlers.syncContactHistory(
+      sessionId,
+      session.sock,
+      contactId,
+      contact.phone
+    );
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error syncing contact history:', error);
+    res.status(500).json({ error: 'Failed to sync contact history' });
+  }
+});
+
 module.exports = router;

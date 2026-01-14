@@ -1,33 +1,151 @@
 const { getPool, createDefaultLeadStatuses } = require('./database');
 
 /**
+ * Validate and normalize phone number
+ * Returns normalized phone or null if invalid
+ */
+function validateAndNormalizePhone(phone) {
+  if (!phone) return null;
+
+  // Remove all non-digit characters
+  const digitsOnly = phone.replace(/\D/g, '');
+
+  // Validate length: WhatsApp numbers are typically 10-15 digits
+  if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+    console.warn(`⚠️ Invalid phone number length: ${phone} (${digitsOnly.length} digits)`);
+    return null;
+  }
+
+  // Skip obviously invalid numbers
+  // Country code 27 = South Africa, but user is from Indonesia (62)
+  // If you see numbers with wrong country codes, you can add validation here
+  // For now, just check if it's a reasonable format
+
+  return digitsOnly;
+}
+
+/**
  * Handle incoming WhatsApp message
  * Saves contact and message to database, emits Socket.io event
  */
-async function handleIncomingMessage(sessionId, message, io) {
+async function handleIncomingMessage(sessionId, message, io, messageType = 'notify') {
   const connection = getPool();
 
   try {
-    // Extract message data
+    // Skip if message is from a group (contains @g.us in JID)
+    if (message.key.remoteJid?.includes('@g.us')) {
+      return;
+    }
+
+    // Skip status broadcasts
+    if (message.key.remoteJid?.includes('@broadcast')) {
+      return;
+    }
+
+    // Extract message data - LOG ALL FIELDS FOR DEBUGGING
     const remoteJid = message.key.remoteJid;
-    const phone = remoteJid.split('@')[0];
+    const fromMe = message.key.fromMe;
+    const participant = message.key.participant;
+    const pushName = message.pushName;
+    const messageKey = message.key;
+
+    // Log ALL key fields to understand the structure
+    console.log(`🔍 Message key fields:`, {
+      messageKey,
+      remoteJid,
+      remoteJidAlt: messageKey.remoteJidAlt,
+      fromMe,
+      participant,
+      pushName,
+      messageId: message.key.id
+    });
+
+    // SOLUTION: Use remoteJidAlt for @lid JIDs (official Baileys solution!)
+    // remoteJidAlt contains the REAL JID when remoteJid is @lid
+    let actualJid = remoteJid;
+
+    // Check if this is an @lid JID (invalid JID from other devices)
+    const isLidJid = remoteJid?.endsWith('@lid');
+
+    if (isLidJid) {
+      console.log(`⚠️ @lid JID detected in remoteJid - checking remoteJidAlt`);
+
+      // STRATEGY 1: Use remoteJidAlt if available (OFFICIAL SOLUTION!)
+      if (messageKey.remoteJidAlt && messageKey.remoteJidAlt.endsWith('@s.whatsapp.net')) {
+        actualJid = messageKey.remoteJidAlt;
+        console.log(`✅ Found REAL JID in remoteJidAlt: ${actualJid}`);
+      }
+      // STRATEGY 2: Use pushName to find existing contact (fallback)
+      else if (pushName) {
+        console.log(`🔍 No remoteJidAlt - will use pushName "${pushName}" to match contact`);
+      }
+      else {
+        console.warn(`⚠️ No remoteJidAlt and no pushName - cannot find real JID`);
+      }
+    }
+
+    let phone = actualJid.split('@')[0];
+
+    // Skip status messages
+    if (phone === 'status') {
+      return;
+    }
+
+    // For @lid JIDs without real JID found (no remoteJidAlt), we'll use the pushName
+    let useLidWorkaround = isLidJid && !actualJid.endsWith('@s.whatsapp.net');
+
+    // Only validate phone if it's not a @lid workaround
+    if (!useLidWorkaround) {
+      const normalizedPhone = validateAndNormalizePhone(phone);
+      if (!normalizedPhone) {
+        console.warn(`⚠️ Skipping message with invalid phone: ${phone}`);
+        return;
+      }
+      phone = normalizedPhone;
+    } else {
+      console.log(`⚠️ @lid JID with no remoteJidAlt - using pushName "${pushName}" workaround`);
+    }
+
     const messageContent = message.message?.conversation ||
                           message.message?.extendedTextMessage?.text ||
                           message.message?.imageMessage?.caption ||
                           '[Media]';
-    const messageType = getMessageType(message);
+    const msgType = getMessageType(message);
     const timestamp = new Date(message.messageTimestamp * 1000);
+    const isFromMe = fromMe;
+    const direction = isFromMe ? 'outgoing' : 'incoming';
 
-    // Get or create contact
-    const contact = await getOrCreateContact(sessionId, phone, message.pushName);
+    // Log for debugging
+    console.log(`📨 Processing message: phone=${phone}, fromMe=${isFromMe}, direction=${direction}, type=${messageType}`);
+    console.log(`   actualJid: ${actualJid}, remoteJid: ${remoteJid}, useLidWorkaround: ${useLidWorkaround}`);
+    if (isLidJid) {
+      console.log(`   Used remoteJidAlt: ${messageKey.remoteJidAlt || 'N/A'}`);
+    }
+
+    // Get or create contact (with @lid workaround if needed)
+    const contact = await getOrCreateContact(sessionId, phone, pushName, useLidWorkaround);
+
+    console.log(`✓ Found/created contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
     // Save message to database
     const messageId = message.key.id || `wa_${Date.now()}_${phone}`;
 
+    // Check if message already exists (avoid duplicates from history sync)
+    const [existing] = await connection.query(
+      `SELECT id FROM messages WHERE message_id = ? AND session_id = ?`,
+      [messageId, sessionId]
+    );
+
+    if (existing.length > 0) {
+      // Message already exists, skip insertion
+      console.log(`⚠️ Duplicate message skipped: ${messageId}`);
+      return;
+    }
+
     await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, 'incoming', messageType, messageContent, timestamp]
+      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sessionId, contact.id, messageId, direction, msgType, messageContent, timestamp, isFromMe ? 'sent' : 'delivered']
     );
 
     // Update last_interaction_at for contact
@@ -36,28 +154,35 @@ async function handleIncomingMessage(sessionId, message, io) {
       [timestamp, contact.id]
     );
 
-    // Emit Socket.io event for real-time update
-    if (io) {
+    // Emit Socket.io event for real-time update (only for new messages, not history sync)
+    if (io && messageType === 'notify') {
       io.emit('chat.newMessage', {
         sessionId,
         message: {
           id: messageId,
-          direction: 'incoming',
+          direction: direction,
           content: messageContent,
-          type: messageType,
+          type: msgType,
           timestamp: timestamp.toISOString(),
-          status: 'delivered'
+          status: isFromMe ? 'sent' : 'delivered'
         },
         contact: {
           id: contact.id,
           phone: contact.phone,
           name: contact.name,
-          source: contact.source
+          source: contact.source,
+          lastInteraction: timestamp.toISOString(),  // IMPORTANT: Include for sorting!
+          lastMessage: {  // IMPORTANT: Include for message preview!
+            content: messageContent,
+            timestamp: timestamp.toISOString()
+          },
+          messageCount: (contact.messageCount || 0) + 1  // Increment message count
         }
       });
     }
 
-    console.log(`✓ Incoming message saved: ${phone} - ${messageContent.substring(0, 50)}`);
+    const logPrefix = messageType === 'notify' ? '✓ New message' : '✓ History message';
+    console.log(`${logPrefix} saved: contact_id=${contact.id}, phone=${phone}, content=${messageContent.substring(0, 50)}`);
   } catch (error) {
     console.error('Error handling incoming message:', error);
     throw error;
@@ -65,13 +190,43 @@ async function handleIncomingMessage(sessionId, message, io) {
 }
 
 /**
- * Get or create contact by phone number
+ * Get or create contact by phone number or name
+ * For messages from other devices with @lid JID, try to match by name first
  */
-async function getOrCreateContact(sessionId, phone, name = null) {
+async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaround = false) {
   const connection = getPool();
 
   try {
-    // Check if contact exists
+    console.log(`🔍 Looking for contact: phone=${phone}, sessionId=${sessionId}, name=${name}, useLidWorkaround=${useLidWorkaround}`);
+
+    // STRATEGY 1: If this is a @lid message (invalid JID from other device), try to match by name first
+    if (useLidWorkaround && name) {
+      console.log(`🔍 Using @lid workaround - searching by name: ${name}`);
+
+      const [contactsByName] = await connection.query(
+        `SELECT * FROM contacts WHERE session_id = ? AND (name = ? OR push_name = ?)`,
+        [sessionId, name, name]
+      );
+
+      if (contactsByName.length > 0) {
+        const contact = contactsByName[0];
+        console.log(`✅ Found contact by NAME for @lid message: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
+
+        // Update phone if the existing contact has a more valid phone
+        if (contact.phone.length < phone.length) {
+          await connection.query(
+            `UPDATE contacts SET phone = ? WHERE id = ?`,
+            [phone, contact.id]
+          );
+          contact.phone = phone;
+          console.log(`📝 Updated contact phone to: ${phone}`);
+        }
+
+        return contact;
+      }
+    }
+
+    // STRATEGY 2: Try to find by phone number (normal behavior)
     const [contacts] = await connection.query(
       `SELECT * FROM contacts WHERE session_id = ? AND phone = ?`,
       [sessionId, phone]
@@ -79,6 +234,7 @@ async function getOrCreateContact(sessionId, phone, name = null) {
 
     if (contacts.length > 0) {
       const contact = contacts[0];
+      console.log(`✅ Found existing contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
       // Update name if provided and current name is null
       if (name && !contact.name) {
@@ -87,24 +243,52 @@ async function getOrCreateContact(sessionId, phone, name = null) {
           [name, contact.id]
         );
         contact.name = name;
+        console.log(`📝 Updated contact name to: ${name}`);
       }
 
       return contact;
     }
 
-    // Create new contact
+    // STRATEGY 3: For @lid messages with name, create new contact but mark it for potential merge
+    if (useLidWorkaround && name) {
+      console.log(`➕ Creating new contact from @lid message: phone=${phone}, name=${name}`);
+
+      const [result] = await connection.query(
+        `INSERT INTO contacts (session_id, phone, name, push_name, source)
+         VALUES (?, ?, ?, ?, 'whatsapp')`,
+        [sessionId, phone, name, name]
+      );
+
+      const newContact = {
+        id: result.insertId,
+        phone,
+        name: name || phone,
+        source: 'whatsapp'
+      };
+
+      console.log(`✅ Created new contact from @lid: id=${newContact.id}, phone=${newContact.phone}, name=${newContact.name}`);
+
+      return newContact;
+    }
+
+    // STRATEGY 4: Normal contact creation
+    console.log(`➕ Creating new contact: phone=${phone}, name=${name}`);
     const [result] = await connection.query(
       `INSERT INTO contacts (session_id, phone, name, push_name, source)
        VALUES (?, ?, ?, ?, 'whatsapp')`,
       [sessionId, phone, name || phone, name]
     );
 
-    return {
+    const newContact = {
       id: result.insertId,
       phone,
       name: name || phone,
       source: 'whatsapp'
     };
+
+    console.log(`✅ Created new contact: id=${newContact.id}, phone=${newContact.phone}, name=${newContact.name}`);
+
+    return newContact;
   } catch (error) {
     console.error('Error getting/creating contact:', error);
     throw error;
@@ -298,6 +482,137 @@ async function syncContactsFromWhatsApp(sessionId, sock) {
 }
 
 /**
+ * Handle history sync from WhatsApp
+ * Processes messages, contacts, and chats from other devices
+ */
+async function handleHistorySync(sessionId, { chats, contacts, messages, syncType }, io) {
+  const connection = getPool();
+
+  try {
+    console.log(`📚 Processing history sync (${syncType}): ${messages?.length || 0} messages`);
+
+    let processedMessages = 0;
+    let skippedMessages = 0;
+    let invalidMessages = 0;
+    let processedContacts = 0;
+    const updatedContactIds = new Set();
+
+    // Process messages from history
+    if (messages && messages.length > 0) {
+      for (const msg of messages) {
+        try {
+          // Skip group messages
+          if (msg.key.remoteJid?.includes('@g.us')) {
+            continue;
+          }
+
+          // Get and validate phone number
+          let phone = msg.key.remoteJid?.split('@')[0];
+          const normalizedPhone = validateAndNormalizePhone(phone);
+
+          if (!normalizedPhone) {
+            console.warn(`⚠️ Skipping history message with invalid phone: ${phone}`);
+            invalidMessages++;
+            continue;
+          }
+
+          phone = normalizedPhone;
+
+          // Get contact ID for this message
+          const [contactData] = await connection.query(
+            `SELECT id FROM contacts WHERE session_id = ? AND phone = ?`,
+            [sessionId, phone]
+          );
+
+          if (contactData.length > 0) {
+            updatedContactIds.add(contactData[0].id);
+          }
+
+          // Process message (will check for duplicates internally)
+          await handleIncomingMessage(sessionId, msg, io, 'append');
+          processedMessages++;
+        } catch (error) {
+          // Skip errors (likely duplicates or invalid)
+          skippedMessages++;
+        }
+      }
+    }
+
+    // Process contacts from history
+    if (contacts && contacts.length > 0) {
+      for (const contact of contacts) {
+        try {
+          // Skip if no phone number
+          if (!contact.id || !contact.id.endsWith('@s.whatsapp.net')) {
+            continue;
+          }
+
+          let phone = contact.id.split('@')[0];
+          const normalizedPhone = validateAndNormalizePhone(phone);
+
+          if (!normalizedPhone) {
+            console.warn(`⚠️ Skipping contact with invalid phone: ${phone}`);
+            continue;
+          }
+
+          phone = normalizedPhone;
+
+          const name = contact.name || contact.notify || contact.verifiedName || null;
+
+          // Check if contact exists
+          const [existing] = await connection.query(
+            `SELECT id FROM contacts WHERE session_id = ? AND phone = ?`,
+            [sessionId, phone]
+          );
+
+          if (existing.length === 0) {
+            // Create new contact
+            const [result] = await connection.query(
+              `INSERT INTO contacts (session_id, phone, name, push_name, source)
+               VALUES (?, ?, ?, ?, 'whatsapp')`,
+              [sessionId, phone, name, name]
+            );
+            updatedContactIds.add(result.insertId);
+            processedContacts++;
+          } else {
+            updatedContactIds.add(existing[0].id);
+          }
+        } catch (error) {
+          console.error('Error processing contact from history:', error);
+        }
+      }
+    }
+
+    console.log(`✓ History sync complete: ${processedMessages} messages processed, ${skippedMessages} skipped, ${invalidMessages} invalid, ${processedContacts} contacts added`);
+
+    // Emit Socket.io event to notify frontend
+    if (io) {
+      io.emit('chat.historySync', {
+        sessionId,
+        updatedContactIds: Array.from(updatedContactIds),
+        stats: {
+          processedMessages,
+          skippedMessages,
+          invalidMessages,
+          processedContacts
+        }
+      });
+    }
+
+    return {
+      processedMessages,
+      skippedMessages,
+      invalidMessages,
+      processedContacts,
+      updatedContactIds: Array.from(updatedContactIds)
+    };
+  } catch (error) {
+    console.error('Error handling history sync:', error);
+    throw error;
+  }
+}
+
+/**
  * Update message status
  */
 async function updateMessageStatus(sessionId, messageId, status) {
@@ -317,6 +632,93 @@ async function updateMessageStatus(sessionId, messageId, status) {
 }
 
 /**
+ * Sync message history for a specific contact from WhatsApp
+ */
+async function syncContactHistory(sessionId, sock, contactId, phone) {
+  const connection = getPool();
+
+  try {
+    console.log(`Syncing message history for contact: ${phone}...`);
+
+    // Get JID
+    const jid = `${phone}@s.whatsapp.net`;
+
+    // Get existing messages from database to avoid duplicates
+    const [existingMessages] = await connection.query(
+      `SELECT message_id FROM messages WHERE contact_id = ? AND session_id = ?`,
+      [contactId, sessionId]
+    );
+    const existingMessageIds = new Set(existingMessages.map(m => m.message_id));
+
+    // Fetch messages from Baileys store
+    const storeMessages = sock.store?.messages || {};
+    const chatMessages = storeMessages[jid] || {};
+
+    let synced = 0;
+    let skipped = 0;
+
+    // Process messages from store
+    for (const [msgId, msgData] of Object.entries(chatMessages)) {
+      // Skip if already exists
+      if (existingMessageIds.has(msgId)) {
+        skipped++;
+        continue;
+      }
+
+      const message = msgData.message;
+
+      // Extract message data
+      const messageContent = message?.conversation ||
+                            message?.extendedTextMessage?.text ||
+                            message?.imageMessage?.caption ||
+                            '[Media]';
+
+      if (!messageContent) continue;
+
+      const messageType = getMessageType({ message });
+      const timestamp = new Date(msgData.messageTimestamp * 1000);
+
+      // Determine direction
+      const isFromMe = message?.key?.fromMe || false;
+      const direction = isFromMe ? 'outgoing' : 'incoming';
+
+      // Insert into database
+      await connection.query(
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sessionId,
+          contactId,
+          msgId,
+          direction,
+          messageType,
+          messageContent,
+          timestamp,
+          isFromMe ? 'sent' : 'delivered'
+        ]
+      );
+
+      synced++;
+    }
+
+    // Update last_interaction_at for contact
+    await connection.query(
+      `UPDATE contacts SET last_interaction_at = COALESCE(
+        (SELECT MAX(timestamp) FROM messages WHERE contact_id = ?),
+        contacts.last_interaction_at
+       ) WHERE id = ?`,
+      [contactId, contactId]
+    );
+
+    console.log(`✓ Message history synced: ${synced} new, ${skipped} skipped (duplicates)`);
+    return { synced, skipped, total: synced + skipped };
+  } catch (error) {
+    console.error('Error syncing contact history:', error);
+    throw error;
+  }
+}
+
+/**
  * Get message type from Baileys message object
  */
 function getMessageType(message) {
@@ -331,11 +733,13 @@ function getMessageType(message) {
 
 module.exports = {
   handleIncomingMessage,
+  handleHistorySync,
   getOrCreateContact,
   sendMessage,
   getContactsWithRecentMessages,
   getContactHistory,
   syncContactsFromWhatsApp,
+  syncContactHistory,
   updateMessageStatus,
   getMessageType
 };

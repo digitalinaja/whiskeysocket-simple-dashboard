@@ -17,6 +17,7 @@ async function startWA({
   onQR,
   onMessage,
   onMessageStatus,
+  onHistorySync,
 } = {}) {
   const {
     default: makeWASocket,
@@ -66,18 +67,30 @@ async function startWA({
 
     sock.ev.on("creds.update", saveCreds);
 
-    // Handle incoming messages
+    // Handle incoming messages (both real-time and history sync)
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      if (type === "notify" && onMessage) {
+      if (onMessage) {
         for (const msg of messages) {
-          // Only process messages that are not from ourselves
-          if (!msg.key.fromMe) {
-            try {
-              await onMessage(sessionId, msg);
-            } catch (error) {
-              console.error("Error handling incoming message:", error);
-            }
+          try {
+            // Process both "notify" (real-time) and "append" (history sync)
+            // The callback will handle the logic differently based on context
+            await onMessage(sessionId, msg, type);
+          } catch (error) {
+            console.error("Error handling message:", error);
           }
+        }
+      }
+    });
+
+    // Handle history sync (chats, contacts, messages from other devices)
+    sock.ev.on("messaging-history.set", async ({ chats, contacts, messages, syncType }) => {
+      console.log(`📚 History sync received: ${messages?.length || 0} messages, ${chats?.length || 0} chats, ${contacts?.length || 0} contacts (syncType: ${syncType})`);
+
+      if (onHistorySync) {
+        try {
+          await onHistorySync(sessionId, { chats, contacts, messages, syncType });
+        } catch (error) {
+          console.error("Error handling history sync:", error);
         }
       }
     });

@@ -1718,7 +1718,7 @@
               </div>
               <div class="chat-actions">
                 <button class="btn-icon" id="viewContactBtn" title="View Contact Details">👤</button>
-                <button class="btn-icon" id="refreshChatBtn" title="Refresh">🔄</button>
+                <button class="btn-icon" id="refreshChatBtn" title="Sync Chat History">🔄</button>
               </div>
             </div>
 
@@ -3141,6 +3141,26 @@
       }
     });
 
+    // Handle history sync completion
+    socket.on('chat.historySync', async (data) => {
+      const { sessionId, updatedContactIds, stats } = data;
+
+      console.log('📚 History sync completed:', stats);
+
+      // Update contacts list if in same session
+      if (sessionId === chatState.currentSession) {
+        // Reload all contacts to get updated data
+        await loadChatContacts(sessionId);
+
+        // If current chat was updated, reload messages
+        if (chatState.currentContact && updatedContactIds.includes(chatState.currentContact.id)) {
+          await loadContactMessages(chatState.currentContact.id);
+          renderMessages();
+          scrollToMessageBottom();
+        }
+      }
+    });
+
     // Chat Event Listeners
     document.getElementById('chatSessionSelect')?.addEventListener('change', (e) => {
       chatState.currentSession = e.target.value;
@@ -3174,6 +3194,41 @@
     document.getElementById('viewContactBtn')?.addEventListener('click', () => {
       if (chatState.currentContact) {
         showContactDetailModal(chatState.currentContact.id);
+      }
+    });
+
+    // Sync Chat History
+    document.getElementById('refreshChatBtn')?.addEventListener('click', async () => {
+      if (!chatState.currentContact || !chatState.currentSession) {
+        alert('Please select a contact first');
+        return;
+      }
+
+      const btn = document.getElementById('refreshChatBtn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳';
+      btn.title = 'Syncing...';
+
+      try {
+        const data = await postJson('/api/contacts/' + chatState.currentContact.id + '/sync-history', {
+          sessionId: chatState.currentSession
+        });
+
+        if (data.success) {
+          // Reload messages for this contact
+          await loadContactMessages(chatState.currentContact.id);
+
+          // Show result
+          alert(`✓ Sync complete!\n\n${data.synced} new messages synced\n${data.skipped} duplicates skipped`);
+        }
+      } catch (err) {
+        console.error('Failed to sync history:', err);
+        alert('Failed to sync chat history: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.title = 'Refresh';
       }
     });
 

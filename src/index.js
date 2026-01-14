@@ -223,12 +223,21 @@ async function createSession(sessionId) {
       session.status = { ...session.status, hasQR: true };
       broadcastStatus(sessionId);
     },
-    onMessage: async (sessionId, message) => {
-      // Handle incoming messages from WhatsApp
+    onMessage: async (sessionId, message, messageType = 'notify') => {
+      // Handle incoming messages from WhatsApp (both real-time and history sync)
       try {
-        await chatHandlers.handleIncomingMessage(sessionId, message, io);
+        await chatHandlers.handleIncomingMessage(sessionId, message, io, messageType);
       } catch (error) {
         console.error('Error handling incoming message:', error);
+      }
+    },
+    onHistorySync: async (sessionId, data) => {
+      // Handle history sync from WhatsApp (messages from other devices)
+      try {
+        const result = await chatHandlers.handleHistorySync(sessionId, data, io);
+        console.log(`✓ History sync completed for session ${sessionId}:`, result);
+      } catch (error) {
+        console.error('Error handling history sync:', error);
       }
     }
   });
