@@ -65,6 +65,7 @@ async function handleIncomingMessage(sessionId, message, io, messageType = 'noti
 
     // Log ALL key fields to understand the structure
     console.log(`🔍 Message key fields:`, {
+      message,
       messageKey,
       remoteJid,
       remoteJidAlt: messageKey.remoteJidAlt,
@@ -137,7 +138,8 @@ async function handleIncomingMessage(sessionId, message, io, messageType = 'noti
     }
 
     // Get or create contact (with @lid workaround if needed)
-    const contact = await getOrCreateContact(sessionId, phone, pushName, useLidWorkaround);
+    // Don't use pushName for outgoing messages to avoid saving sender's own name as recipient's name
+    const contact = await getOrCreateContact(sessionId, phone, isFromMe ? null : pushName, useLidWorkaround);
 
     console.log(`✓ Found/created contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
@@ -260,8 +262,8 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
       const contact = contacts[0];
       console.log(`✅ Found existing contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
-      // Update name if provided and current name is null
-      if (name && !contact.name) {
+      // Update name if provided and current name is null or is a phone number (placeholder)
+      if (name && (!contact.name || contact.name === contact.phone)) {
         await connection.query(
           `UPDATE contacts SET name = ? WHERE id = ?`,
           [name, contact.id]

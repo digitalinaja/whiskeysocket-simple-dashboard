@@ -217,12 +217,14 @@ async function syncContactsFromGoogle(sessionId) {
         const contact = existing[0];
 
         // Update if source is 'whatsapp' or 'google', change to 'both'
-        if (contact.source !== 'both') {
+        // Always prioritize Google Contact name over WhatsApp pushName (more official/consistent)
+        if (contact.source !== 'both' || contact.name !== name) {
           await connection.query(
-            `UPDATE contacts SET source = 'both', google_contact_id = ? WHERE id = ?`,
-            [gc.resourceName, contact.id]
+            `UPDATE contacts SET source = 'both', google_contact_id = ?, name = ?, push_name = ? WHERE id = ?`,
+            [gc.resourceName, name, name, contact.id]
           );
           merged++;
+          console.log(`📝 Merged contact: phone=${primaryPhone}, name="${name}" (updated from "${contact.name}")`);
         }
       } else {
         // Create new contact with source='google'
