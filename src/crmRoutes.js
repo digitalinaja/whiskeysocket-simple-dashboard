@@ -24,9 +24,25 @@ router.get('/contacts', async (req, res) => {
     const params = [sessionId];
 
     if (search) {
-      whereClause += ` AND (c.name LIKE ? OR c.phone LIKE ?)`;
-      const searchParam = `%${search}%`;
-      params.push(searchParam, searchParam);
+      // Normalize search term: trim and convert to lowercase for better matching
+      const searchTerm = search.trim().toLowerCase();
+
+      // Normalize phone number if search looks like a phone number
+      const normalizedPhone = require('./chatHandlers').normalizePhoneNumber(searchTerm);
+      const phoneSearch = normalizedPhone || searchTerm;
+
+      // Search in multiple fields with case-insensitive matching
+      // Using LOWER() for case-insensitive search across name, push_name
+      // Support both original format and normalized phone format
+      whereClause += ` AND (
+        LOWER(c.name) LIKE ? OR
+        LOWER(c.push_name) LIKE ? OR
+        c.phone LIKE ? OR
+        c.phone LIKE ?
+      )`;
+      const searchParam = `%${searchTerm}%`;
+      const phoneParam = `%${phoneSearch}%`;
+      params.push(searchParam, searchParam, searchParam, phoneParam);
     }
 
     if (statusId) {
