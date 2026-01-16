@@ -9,7 +9,7 @@ const chatHandlers = require('./chatHandlers');
  */
 router.get('/contacts', async (req, res) => {
   try {
-    const { sessionId, search, limit = 50, page = 1, statusId, tagId } = req.query;
+    const { sessionId, search, limit = 50, page = 1, statusId, tagId, tagIds } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
@@ -50,9 +50,21 @@ router.get('/contacts', async (req, res) => {
       params.push(statusId);
     }
 
-    if (tagId) {
-      whereClause += ` AND c.id IN (SELECT contact_id FROM contact_tags WHERE tag_id = ?)`;
-      params.push(tagId);
+    const tagFilterValues = [];
+    if (tagIds) {
+      tagIds.split(',')
+        .map(id => parseInt(id.trim(), 10))
+        .filter(id => !Number.isNaN(id))
+        .forEach(id => tagFilterValues.push(id));
+    } else if (tagId) {
+      const single = parseInt(tagId, 10);
+      if (!Number.isNaN(single)) tagFilterValues.push(single);
+    }
+
+    if (tagFilterValues.length) {
+      const placeholders = tagFilterValues.map(() => '?').join(',');
+      whereClause += ` AND c.id IN (SELECT contact_id FROM contact_tags WHERE tag_id IN (${placeholders}))`;
+      params.push(...tagFilterValues);
     }
 
     // Get total count
@@ -73,7 +85,9 @@ router.get('/contacts', async (req, res) => {
         (SELECT content FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_content,
         (SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_time,
         (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as message_count,
-        (SELECT GROUP_CONCAT(t.id) FROM contact_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.contact_id = c.id) as tag_ids
+        (SELECT GROUP_CONCAT(t.id) FROM contact_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.contact_id = c.id) as tag_ids,
+        (SELECT content FROM notes WHERE contact_id = c.id ORDER BY created_at DESC LIMIT 1) as latest_note_content,
+        (SELECT created_at FROM notes WHERE contact_id = c.id ORDER BY created_at DESC LIMIT 1) as latest_note_created_at
       FROM contacts c
       LEFT JOIN lead_statuses ls ON c.lead_status_id = ls.id
       ${whereClause}
@@ -106,7 +120,11 @@ router.get('/contacts', async (req, res) => {
         lastMessage: {
           content: c.last_message_content,
           timestamp: c.last_message_time
-        }
+        },
+        latestNote: c.latest_note_content ? {
+          content: c.latest_note_content,
+          createdAt: c.latest_note_created_at
+        } : null
       })),
       pagination: {
         page: parseInt(page),
@@ -167,6 +185,13 @@ router.get('/contacts/:contactId', async (req, res) => {
       [contactId]
     );
 
+    const formattedNotes = notes.map(note => ({
+      id: note.id,
+      sessionId: note.session_id,
+      content: note.content,
+      createdAt: note.created_at
+    }));
+
     res.json({
       contact: {
         id: contact.id,
@@ -182,7 +207,7 @@ router.get('/contacts/:contactId', async (req, res) => {
           color: contact.lead_status_color
         } : null,
         tags: tags,
-        notes: notes,
+        notes: formattedNotes,
         lastInteraction: contact.last_interaction_at,
         createdAt: contact.created_at
       }

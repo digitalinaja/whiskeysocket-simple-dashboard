@@ -138,15 +138,30 @@ function renderMessages() {
     const time = formatMessageTime(msg.timestamp);
 
     let mediaContent = '';
-    if (msg.type === 'image' && msg.mediaUrl) {
-      const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
-      mediaContent = `
-        <div class="message-media">
-          <img class="message-media-image" src="${mediaSrc}" alt="${escapeHtml(msg.content)}"
-               onclick="window.open(this.src, '_blank')"
-               onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
-        </div>
-      `;
+    if ((msg.type === 'image' || msg.type === 'video') && msg.mediaUrl) {
+      const mediaSrc = msg.mediaUrl.startsWith('http')
+        ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}`
+        : `/media/${msg.mediaUrl}`;
+
+      if (msg.type === 'image') {
+        mediaContent = `
+          <div class="message-media">
+            <img class="message-media-image" src="${mediaSrc}" alt="${escapeHtml(msg.content)}"
+                 onclick="window.open(this.src, '_blank')"
+                 onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
+          </div>
+        `;
+      } else if (msg.type === 'video') {
+        mediaContent = `
+          <div class="message-media">
+            <video class="message-media-video" controls preload="metadata"
+                   onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load video</span>'">
+              <source src="${mediaSrc}" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        `;
+      }
     }
 
     let textContent = '';

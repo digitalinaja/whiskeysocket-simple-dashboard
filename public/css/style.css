@@ -258,12 +258,44 @@
   .contact-card-phone {
     @apply text-xs text-slate-400;
   }
+  .contact-card-status {
+    @apply mt-3 flex items-center justify-between text-xs;
+  }
+  .status-label {
+    @apply uppercase tracking-wide text-[11px] text-slate-500;
+  }
+  .lead-status-pill {
+    @apply rounded-full border border-slate-700 bg-slate-900/50 px-3 py-1 text-[11px] font-semibold text-slate-100;
+    border-color: color-mix(in srgb, var(--status-color, #38bdf8) 50%, transparent);
+    color: var(--status-color, #38bdf8);
+  }
+  .lead-status-empty {
+    @apply text-[11px] text-slate-500 italic;
+  }
   .contact-card-tags {
     @apply mt-3 flex flex-wrap gap-2;
+  }
+  .tag-empty {
+    @apply text-[11px] text-slate-500 italic;
   }
   .tag-badge,
   .lead-status-badge {
     @apply rounded-full px-2 py-1 text-[11px] font-medium;
+  }
+  .contact-card-note {
+    @apply mt-3 flex gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-3;
+  }
+  .note-icon {
+    @apply text-lg;
+  }
+  .note-content {
+    @apply flex-1;
+  }
+  .note-text {
+    @apply text-sm text-slate-100;
+  }
+  .note-time {
+    @apply text-[11px] text-slate-500 mt-1;
   }
   .contact-card-meta {
     @apply mt-3 flex items-center justify-between text-xs text-slate-400;
@@ -414,6 +446,9 @@
   .message-media-image {
     @apply block max-h-[300px] max-w-full cursor-zoom-in;
   }
+  .message-media-video {
+    @apply block w-full max-h-[360px] bg-black;
+  }
   .job-item {
     @apply cursor-pointer rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 transition;
   }
@@ -472,6 +507,21 @@
   }
   :root[data-theme='light'] .status-badge {
     @apply bg-slate-100 border-slate-200 text-slate-700;
+  }
+  :root[data-theme='light'] .lead-status-pill {
+    @apply bg-slate-100 border-slate-200 text-slate-700;
+  }
+  :root[data-theme='light'] .lead-status-empty,
+  :root[data-theme='light'] .tag-empty,
+  :root[data-theme='light'] .status-label,
+  :root[data-theme='light'] .note-time {
+    @apply text-slate-500;
+  }
+  :root[data-theme='light'] .contact-card-note {
+    @apply border-slate-200 bg-white;
+  }
+  :root[data-theme='light'] .note-text {
+    @apply text-slate-800;
   }
   :root[data-theme='light'] .log {
     @apply bg-slate-100 border-slate-200 text-slate-700;
@@ -535,6 +585,30 @@
   .tag-input-row {
     @apply flex flex-wrap gap-2;
   }
+    .tag-filter-controls {
+      @apply mb-3 flex items-center gap-2;
+    }
+    .tag-filter-search {
+      @apply flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
+    }
+    .tag-filter-clear {
+      @apply text-xs text-slate-400 border border-slate-700 rounded-lg px-2 py-1 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40;
+    }
+    .tag-filter-chips {
+      @apply flex flex-wrap gap-2;
+    }
+    .tag-filter-chip {
+      @apply flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-xs text-slate-200 transition;
+    }
+    .tag-filter-chip.active {
+      @apply border-cyan-400/60 bg-cyan-400/20 text-cyan-100;
+    }
+    .tag-filter-chip:hover {
+      @apply border-slate-600 bg-slate-800;
+    }
+    .chip-dot {
+      @apply h-2.5 w-2.5 rounded-full;
+    }
   .note-item {
     @apply p-3 rounded-lg border border-slate-800 bg-slate-900/40 mb-3;
   }

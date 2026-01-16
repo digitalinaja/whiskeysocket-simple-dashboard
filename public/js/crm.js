@@ -26,9 +26,20 @@ async function loadCRMContacts(sessionId) {
     const params = new URLSearchParams({
       sessionId,
       page: crmState.pagination.page,
-      limit: crmState.pagination.limit,
-      ...crmState.filters
+      limit: crmState.pagination.limit
     });
+
+    if (crmState.filters.search) {
+      params.set('search', crmState.filters.search);
+    }
+
+    if (crmState.filters.statusId) {
+      params.set('statusId', crmState.filters.statusId);
+    }
+
+    if (crmState.filters.tagIds?.length) {
+      params.set('tagIds', crmState.filters.tagIds.join(','));
+    }
 
     const res = await fetch(`/api/contacts?${params}`);
     const data = await res.json();
@@ -111,20 +122,45 @@ function renderCRMContacts(contacts) {
   gridDiv.innerHTML = contacts.map(contact => {
     const status = crmState.leadStatuses[contact.leadStatusId];
     const tags = (contact.tagIds || []).map(tagId => crmState.tags[tagId]).filter(Boolean);
+    const latestNote = contact.latestNote;
+    const displayName = contact.name || contact.phone;
+    const avatarInitial = displayName ? displayName[0] : '?';
+
+    const statusMarkup = status
+      ? `<span class="lead-status-pill" style="--status-color:${status.color}">${status.name}</span>`
+      : '<span class="lead-status-empty">No status</span>';
+
+    const tagsMarkup = tags.length
+      ? tags.map(tag => `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}">${tag.name}</span>`).join('')
+      : '<span class="tag-empty">No tags</span>';
+
+    const latestNoteMarkup = latestNote ? `
+      <div class="contact-card-note">
+        <div class="note-icon">📝</div>
+        <div class="note-content">
+          <div class="note-text">${escapeHtml(truncateText(latestNote.content, 90))}</div>
+          <div class="note-time">${formatDateTime(latestNote.createdAt)}</div>
+        </div>
+      </div>
+    ` : '';
 
     return `
       <div class="contact-card" data-contact-id="${contact.id}">
         <div class="contact-card-header">
-          <div class="contact-card-avatar">${contact.name ? contact.name[0] : '?'}</div>
+          <div class="contact-card-avatar">${avatarInitial}</div>
           <div class="contact-card-info">
-            <div class="contact-card-name">${contact.name || contact.phone}</div>
+            <div class="contact-card-name">${displayName}</div>
             <div class="contact-card-phone">${contact.phone}</div>
           </div>
         </div>
-        <div class="contact-card-tags">
-          ${status ? `<span class="lead-status-badge" style="background: ${status.color}20; color: ${status.color}">${status.name}</span>` : ''}
-          ${tags.map(tag => `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}">${tag.name}</span>`).join('')}
+        <div class="contact-card-status">
+          <span class="status-label">Lead Status</span>
+          ${statusMarkup}
         </div>
+        <div class="contact-card-tags">
+          ${tagsMarkup}
+        </div>
+        ${latestNoteMarkup}
         <div class="contact-card-meta">
           <span>Last interaction: ${contact.lastInteraction ? formatDate(contact.lastInteraction) : 'Never'}</span>
           <span>${contact.messageCount || 0} messages</span>
@@ -139,6 +175,12 @@ function renderCRMContacts(contacts) {
       showContactDetailModal(contactId);
     });
   });
+}
+
+function truncateText(text, maxLength = 80) {
+  if (!text) return '';
+  const clean = text.trim();
+  return clean.length > maxLength ? `${clean.slice(0, maxLength - 1)}…` : clean;
 }
 
 /**
@@ -207,18 +249,65 @@ function renderCRMTagFilters() {
     return;
   }
 
-  container.innerHTML = tags.map(tag => `
-    <label class="tag-checkbox">
-      <input type="checkbox" value="${tag.id}" data-tag-name="${tag.name}">
-      <span style="color: ${tag.color}">${tag.name}</span>
-    </label>
-  `).join('');
+  const selected = new Set(crmState.filters.tagIds);
 
-  container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-    checkbox.addEventListener('change', () => {
-      crmState.filters.tagIds = Array.from(container.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+  container.innerHTML = `
+    <div class="tag-filter-controls">
+      <input type="text" id="tagFilterSearch" class="tag-filter-search" placeholder="Search tags...">
+      <button type="button" id="clearTagFilters" class="tag-filter-clear" ${selected.size ? '' : 'disabled'}>Clear</button>
+    </div>
+    <div class="tag-filter-chips" id="tagFilterChipList">
+      ${tags.map(tag => `
+        <button type="button"
+          class="tag-filter-chip ${selected.has(tag.id) ? 'active' : ''}"
+          data-tag-id="${tag.id}"
+          data-tag-name="${escapeHtml(tag.name)}"
+          style="--chip-color:${tag.color};">
+          <span class="chip-dot" style="background:${tag.color}"></span>
+          ${escapeHtml(tag.name)}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const chipList = container.querySelector('#tagFilterChipList');
+  chipList?.querySelectorAll('.tag-filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const id = parseInt(chip.dataset.tagId, 10);
+      if (!id) return;
+
+      if (selected.has(id)) {
+        selected.delete(id);
+        chip.classList.remove('active');
+      } else {
+        selected.add(id);
+        chip.classList.add('active');
+      }
+
+      crmState.filters.tagIds = Array.from(selected);
       crmState.pagination.page = 1;
       loadCRMContacts(crmState.currentSession);
+
+      const clearBtn = container.querySelector('#clearTagFilters');
+      if (clearBtn) {
+        clearBtn.disabled = selected.size === 0;
+      }
+    });
+  });
+
+  container.querySelector('#clearTagFilters')?.addEventListener('click', () => {
+    if (!selected.size) return;
+    crmState.filters.tagIds = [];
+    crmState.pagination.page = 1;
+    renderCRMTagFilters();
+    loadCRMContacts(crmState.currentSession);
+  });
+
+  container.querySelector('#tagFilterSearch')?.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    chipList?.querySelectorAll('.tag-filter-chip').forEach(chip => {
+      const name = chip.dataset.tagName?.toLowerCase() || '';
+      chip.style.display = name.includes(term) ? '' : 'none';
     });
   });
 }
