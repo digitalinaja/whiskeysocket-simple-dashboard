@@ -96,7 +96,7 @@ async function openChatContact(contactId) {
   // Scroll to bottom after messages are loaded and DOM is updated
   setTimeout(() => {
     scrollToBottom(document.getElementById('messagesContainer'));
-  }, 100);
+  }, 1000);
   
   // Focus on message input textarea
   clearSelectedMedia();
