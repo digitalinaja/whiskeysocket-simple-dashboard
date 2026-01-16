@@ -92,7 +92,14 @@ async function openChatContact(contactId) {
 
   await loadContactMessages(contact.id);
   renderChatContactsList();
-  scrollToBottom(document.getElementById('messagesContainer'));
+  
+  // Scroll to bottom after messages are loaded and DOM is updated
+  setTimeout(() => {
+    scrollToBottom(document.getElementById('messagesContainer'));
+  }, 100);
+  
+  // Focus on message input textarea
+  document.getElementById('messageInput').focus();
 }
 
 /**
@@ -121,7 +128,7 @@ function renderMessages() {
   const messages = chatState.messages[chatState.currentContact.id] || [];
 
   if (messages.length === 0) {
-    container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 40px;">No messages yet. Start the conversation!</div>';
+    container.innerHTML = '<div class="empty-state">No messages yet. Start the conversation!</div>';
     return;
   }
 
@@ -135,24 +142,23 @@ function renderMessages() {
       const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
       mediaContent = `
         <div class="message-media">
-          <img src="${mediaSrc}" alt="${escapeHtml(msg.content)}"
-               style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer;"
+          <img class="message-media-image" src="${mediaSrc}" alt="${escapeHtml(msg.content)}"
                onclick="window.open(this.src, '_blank')"
-               onerror="this.parentElement.innerHTML='<span style=\\'color: var(--muted)\\'>Failed to load image</span>'" />
+               onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
         </div>
       `;
     }
 
     let textContent = '';
     if (isDeleted) {
-      textContent = `<span style="color: var(--muted); font-style: italic;">🗑️ ${escapeHtml(msg.content)}</span>`;
+      textContent = `<span class="text-muted italic">🗑️ ${escapeHtml(msg.content)}</span>`;
     } else if (msg.type === 'text' || (!msg.mediaUrl && !mediaContent)) {
       textContent = escapeHtml(msg.content);
     }
 
     return `
       <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}">
-        <div class="message-bubble" style="${isDeleted ? 'background: rgba(0,0,0,0.03); opacity: 0.7;' : ''}">
+        <div class="message-bubble">
           ${!isDeleted ? mediaContent : ''}
           ${textContent}
           <div class="message-time">

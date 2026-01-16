@@ -9,7 +9,531 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <link rel="stylesheet" href="styles.css">
+  <script>
+    window.tailwind = {
+      config: {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui']
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style type="text/tailwindcss">
+    @layer base {
+      body {
+        @apply bg-slate-950 text-slate-100 font-sans min-h-screen md:flex;
+      }
+      h1, h2, h3, h4 {
+        @apply text-slate-50;
+      }
+      a {
+        @apply text-slate-200;
+      }
+      input, textarea, select {
+        @apply w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
+      }
+      button {
+        @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400 transition;
+      }
+      table {
+        @apply w-full text-sm;
+      }
+      th {
+        @apply text-left text-slate-300 font-medium;
+      }
+      td {
+        @apply text-slate-200;
+      }
+      :root[data-theme='light'] body {
+        @apply bg-slate-100 text-slate-900;
+      }
+      :root[data-theme='light'] a {
+        @apply text-slate-700;
+      }
+      :root[data-theme='light'] input,
+      :root[data-theme='light'] textarea,
+      :root[data-theme='light'] select {
+        @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-500;
+      }
+      :root[data-theme='light'] button {
+        @apply text-slate-900;
+      }
+    }
+
+    @layer components {
+      .mobile-menu-toggle {
+        @apply fixed left-4 top-4 z-50 rounded-lg bg-slate-800/80 px-3 py-2 text-slate-100 md:hidden;
+      }
+      .theme-toggle {
+        @apply fixed right-4 top-4 z-40 hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-200 md:flex;
+      }
+      .sidebar {
+        @apply fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-slate-800 bg-slate-900/80 backdrop-blur transition-transform duration-200 md:static md:translate-x-0;
+      }
+      .sidebar.open {
+        @apply translate-x-0;
+      }
+      .sidebar.collapsed {
+        @apply md:w-20;
+      }
+      .sidebar.collapsed .nav-section-title,
+      .sidebar.collapsed .nav-item span:not(.icon),
+      .sidebar.collapsed .sidebar-header h1 {
+        @apply hidden;
+      }
+      .sidebar.collapsed .nav-item {
+        @apply justify-center;
+      }
+      .sidebar-header {
+        @apply px-5 py-6;
+      }
+      .sidebar-header h1 {
+        @apply flex items-center gap-3 text-lg font-semibold;
+      }
+      .logo-icon {
+        @apply flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500 text-slate-950 font-bold;
+      }
+      .nav-menu {
+        @apply px-3 pb-6;
+      }
+      .nav-section {
+        @apply mb-6;
+      }
+      .nav-section-title {
+        @apply mb-2 px-3 text-xs uppercase tracking-wide text-slate-500;
+      }
+      .nav-item {
+        @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-50 transition;
+      }
+      .nav-item.active {
+        @apply bg-slate-800 text-slate-50;
+      }
+      .main-content {
+        @apply min-h-screen flex-1 px-5 py-6 md:px-8;
+      }
+      .main-content.expanded {
+        @apply md:ml-0;
+      }
+      .page-header {
+        @apply mb-6;
+      }
+      .page-title {
+        @apply text-2xl font-semibold;
+      }
+      .page-subtitle {
+        @apply text-sm text-slate-400;
+      }
+      .card {
+        @apply rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm;
+      }
+      .card-title {
+        @apply mb-4 text-sm font-semibold text-slate-200;
+      }
+      .stats-grid {
+        @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6;
+      }
+      .stat-card {
+        @apply flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+      }
+      .stat-icon {
+        @apply text-2xl;
+      }
+      .stat-label {
+        @apply text-xs text-slate-400;
+      }
+      .stat-value {
+        @apply text-xl font-semibold;
+      }
+      .status-badge {
+        @apply inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-slate-200;
+      }
+      .status-dot {
+        @apply h-2 w-2 rounded-full bg-slate-400;
+      }
+      .btn-group {
+        @apply flex flex-wrap gap-2;
+      }
+      .btn-ghost {
+        @apply rounded-lg border border-slate-700 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-slate-800;
+      }
+      .btn-danger {
+        @apply rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-400;
+      }
+      .btn-primary {
+        @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400;
+      }
+      .btn-sm {
+        @apply rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700;
+      }
+      .btn-icon {
+        @apply rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm text-slate-200 hover:bg-slate-700;
+      }
+      .btn-send {
+        @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400;
+      }
+      .log {
+        @apply rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300;
+      }
+      .qr-box {
+        @apply flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-6;
+      }
+      .view {
+        @apply hidden;
+      }
+      .view.active {
+        @apply block;
+      }
+      .view-flex.active {
+        @apply flex;
+      }
+      .chat-container {
+        @apply grid gap-4 lg:grid-cols-3;
+        height: 100vh;
+      }
+      .chat-contacts-sidebar {
+        @apply flex flex-col min-h-0 h-full rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+      }
+      .chat-window {
+        @apply lg:col-span-2 flex flex-col min-h-0 h-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60;
+      }
+      .chat-window-header {
+        @apply flex items-center justify-between border-b border-slate-800 p-4;
+      }
+      .chat-header {
+        @apply flex flex-col gap-3;
+      }
+      .search-box {
+        @apply relative;
+      }
+      .chat-welcome {
+        @apply flex flex-1 flex-col items-center justify-center gap-3 text-slate-400;
+      }
+      .welcome-icon {
+        @apply text-4xl;
+      }
+      .contact-avatar {
+        @apply flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-slate-200;
+      }
+      .contact-item-info {
+        @apply flex-1 overflow-hidden;
+      }
+      .contact-item-name {
+        @apply text-sm font-medium text-slate-100;
+      }
+      .contact-item:hover .contact-item-name {
+        @apply text-white;
+      }
+      .contact-item-preview {
+        @apply text-xs text-slate-400 truncate;
+      }
+      .contact-item-meta {
+        @apply text-xs text-slate-500;
+      }
+      .contacts-list {
+        @apply mt-4 flex-1 space-y-2 overflow-y-auto;
+        max-height: calc(100vh - 200px);
+      }
+      .contact-item {
+        @apply flex items-center gap-3 rounded-lg border border-transparent p-2 hover:bg-slate-800 hover:border-slate-700 cursor-pointer;
+      }
+      .contact-item.active {
+        @apply border-slate-700 bg-slate-800;
+      }
+      .messages-container {
+        @apply flex-1 overflow-y-auto p-4 space-y-3;
+        max-height: calc(100vh - 200px);
+      }
+      .message-input-area {
+        @apply border-t border-slate-800 p-4;
+      }
+      .message-input-wrapper {
+        @apply flex items-end gap-2;
+      }
+      .crm-toolbar {
+        @apply mb-4 flex flex-wrap items-center justify-between gap-3;
+      }
+      .contact-count {
+        @apply text-sm text-slate-300;
+      }
+      .sync-buttons {
+        @apply flex flex-wrap gap-2;
+      }
+      .google-status,
+      .google-notice {
+        @apply mt-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-300;
+      }
+      .contact-card-header {
+        @apply flex items-center gap-3;
+      }
+      .contact-card-avatar {
+        @apply flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-slate-200;
+      }
+      .contact-card-info {
+        @apply flex-1;
+      }
+      .contact-card-name {
+        @apply text-sm font-semibold;
+      }
+      .contact-card-phone {
+        @apply text-xs text-slate-400;
+      }
+      .contact-card-tags {
+        @apply mt-3 flex flex-wrap gap-2;
+      }
+      .tag-badge,
+      .lead-status-badge {
+        @apply rounded-full px-2 py-1 text-[11px] font-medium;
+      }
+      .contact-card-meta {
+        @apply mt-3 flex items-center justify-between text-xs text-slate-400;
+      }
+      .pagination {
+        @apply mt-4 flex flex-wrap gap-2;
+      }
+      .session-selector {
+        @apply mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-300;
+      }
+      .session-selector-row {
+        @apply flex-1 min-w-[200px];
+      }
+      .form-group {
+        @apply mb-4;
+      }
+      .form-group label {
+        @apply mb-1 block text-xs font-medium text-slate-300;
+      }
+      .crm-container {
+        @apply grid gap-4 lg:grid-cols-4;
+      }
+      .crm-filters-sidebar {
+        @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+      }
+      .crm-contacts-grid {
+        @apply lg:col-span-3;
+      }
+      .contacts-cards {
+        @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+      }
+      .contact-card {
+        @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 transition;
+      }
+      .modal {
+        @apply fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4;
+      }
+      .modal.active {
+        @apply flex;
+      }
+      .modal-content {
+        @apply w-full max-w-lg rounded-xl border border-slate-800 bg-slate-900 p-5;
+      }
+      .modal-header {
+        @apply flex items-center justify-between border-b border-slate-800 pb-3;
+      }
+      .modal-close {
+        @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200;
+      }
+      .job-list {
+        @apply space-y-3;
+      }
+      .text-muted {
+        @apply text-slate-400;
+      }
+      .empty-state {
+        @apply py-10 text-center text-slate-400;
+      }
+      .auto-grid-200 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        @apply gap-4;
+      }
+      .auto-grid-200-tight {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        @apply gap-3;
+      }
+      .info-banner {
+        @apply rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-200;
+      }
+      .helper-text {
+        @apply mt-1 block text-xs text-slate-400;
+      }
+      .file-input {
+        @apply rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100;
+      }
+      .table-wrap {
+        @apply max-h-52 overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/40 p-3;
+      }
+      .table-head-row {
+        @apply border-b border-slate-800;
+      }
+      .table-basic {
+        @apply w-full text-xs;
+        border-collapse: collapse;
+      }
+      .table-cell {
+        @apply px-2 py-2 text-left text-xs font-medium text-slate-300;
+      }
+      .sidebar-collapse {
+        @apply absolute -right-3 top-6 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 md:flex;
+      }
+      .contact-info {
+        @apply flex items-center gap-3;
+      }
+      .contact-details {
+        @apply flex flex-col;
+      }
+      .contact-name {
+        @apply text-sm font-semibold;
+      }
+      .contact-phone {
+        @apply text-xs text-slate-400;
+      }
+      .chat-actions {
+        @apply flex items-center gap-2;
+      }
+      .chat-conversation {
+        @apply flex flex-1 flex-col;
+      }
+      .crm-quick-actions {
+        @apply mb-2 flex flex-wrap gap-2;
+      }
+      .message {
+        @apply flex;
+      }
+      .message.incoming {
+        @apply justify-start;
+      }
+      .message.outgoing {
+        @apply justify-end;
+      }
+      .message-bubble {
+        @apply max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm;
+      }
+      .message.incoming .message-bubble {
+        @apply bg-slate-800 text-slate-100;
+      }
+      .message.outgoing .message-bubble {
+        @apply bg-cyan-500/90 text-slate-950;
+      }
+      .message.deleted .message-bubble {
+        @apply bg-slate-900/40 text-slate-400;
+      }
+      .message-time {
+        @apply mt-1 flex items-center justify-end gap-1 text-[10px] opacity-70;
+      }
+      .message-status {
+        @apply ml-1;
+      }
+      .message-media {
+        @apply mb-2 overflow-hidden rounded-lg border border-slate-700;
+      }
+      .message-media-image {
+        @apply block max-h-[300px] max-w-full cursor-zoom-in;
+      }
+      .job-item {
+        @apply cursor-pointer rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 transition;
+      }
+      .job-item-header {
+        @apply flex items-center gap-3;
+      }
+      .job-item-id {
+        @apply text-xs font-semibold text-slate-300;
+      }
+      .job-item-date {
+        @apply ml-auto text-xs text-slate-400;
+      }
+      .job-item-stats {
+        @apply mt-3 grid grid-cols-2 gap-3 md:grid-cols-4;
+      }
+      .job-stat {
+        @apply rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-center;
+      }
+      .job-stat-label {
+        @apply text-xs text-slate-400;
+      }
+      .job-stat-value {
+        @apply text-lg font-semibold text-slate-100;
+      }
+      .job-next {
+        @apply mt-2 text-xs text-slate-400;
+      }
+      .job-item-footer {
+        @apply mt-2 text-xs text-slate-400;
+      }
+      .status-badge.success {
+        @apply border-emerald-400/40 bg-emerald-400/15 text-emerald-200;
+      }
+      .status-badge.warning {
+        @apply border-amber-400/40 bg-amber-400/15 text-amber-200;
+      }
+      .status-badge.error {
+        @apply border-rose-400/40 bg-rose-400/15 text-rose-200;
+      }
+      :root[data-theme='light'] .sidebar {
+        @apply bg-white/90 border-slate-200;
+      }
+      :root[data-theme='light'] .nav-item {
+        @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+      }
+      :root[data-theme='light'] .nav-item.active {
+        @apply bg-slate-200 text-slate-900;
+      }
+      :root[data-theme='light'] .card,
+      :root[data-theme='light'] .chat-contacts-sidebar,
+      :root[data-theme='light'] .chat-window,
+      :root[data-theme='light'] .crm-filters-sidebar,
+      :root[data-theme='light'] .contact-card,
+      :root[data-theme='light'] .modal-content {
+        @apply bg-white border-slate-200;
+      }
+      :root[data-theme='light'] .status-badge {
+        @apply bg-slate-100 border-slate-200 text-slate-700;
+      }
+      :root[data-theme='light'] .log {
+        @apply bg-slate-100 border-slate-200 text-slate-700;
+      }
+      :root[data-theme='light'] .contact-item.active {
+        @apply bg-slate-100 border-slate-200;
+      }
+      :root[data-theme='light'] .contact-item:hover {
+        @apply bg-slate-100 border-slate-200;
+      }
+      :root[data-theme='light'] .contact-item-name {
+        @apply text-slate-900;
+      }
+      :root[data-theme='light'] .contact-item:hover .contact-item-name {
+        @apply text-slate-800;
+      }
+      :root[data-theme='light'] h1,
+      :root[data-theme='light'] h2,
+      :root[data-theme='light'] h3,
+      :root[data-theme='light'] h4 {
+        @apply text-slate-900;
+      }
+      :root[data-theme='light'] .message-input-area,
+      :root[data-theme='light'] .chat-window-header {
+        @apply border-slate-200;
+      }
+      :root[data-theme='light'] .message.incoming .message-bubble {
+        @apply bg-slate-100 text-slate-900;
+      }
+      :root[data-theme='light'] .message.outgoing .message-bubble {
+        @apply bg-cyan-300 text-slate-900;
+      }
+      :root[data-theme='light'] .job-item,
+      :root[data-theme='light'] .job-stat {
+        @apply bg-white border-slate-200;
+      }
+      :root[data-theme='light'] .message-media {
+        @apply border-slate-200;
+      }
+    }
+  </style>
 </head>
 <body>
   <!-- Mobile Menu Toggle -->
@@ -271,7 +795,7 @@
               <option value="very-conservative">🔒 Very Conservative - Nomor penting / >1000 nomor</option>
               <option value="custom">⚙️ Custom - Konfigurasi manual</option>
             </select>
-            <small id="presetDescription" style="color: var(--muted); display: block; margin-top: 4px;">
+            <small id="presetDescription" class="helper-text">
               Simulasi behavior manusia natural. Speed: 3-8 detik/pesan. Cooldown setiap 30 pesan. Risiko: Medium.
             </small>
           </div>
@@ -279,8 +803,8 @@
           <div class="form-group">
             <label>Input Method</label>
             <div class="btn-group">
-              <button type="button" id="methodManual" style="flex:1;">📝 Manual Input</button>
-              <button type="button" id="methodCsv" style="flex:1;">📁 Upload CSV</button>
+              <button type="button" id="methodManual" class="flex-1">📝 Manual Input</button>
+              <button type="button" id="methodCsv" class="flex-1">📁 Upload CSV</button>
             </div>
           </div>
 
@@ -288,88 +812,88 @@
             <div class="form-group">
               <label for="broadcastNumbers">Phone Numbers (one per line)</label>
               <textarea id="broadcastNumbers" placeholder="6281234567890&#10;6289876543210&#10;6285555555555"></textarea>
-              <small style="color: var(--muted); display: block; margin-top: 4px;">Format: Country code + number, one per line</small>
+              <small class="helper-text">Format: Country code + number, one per line</small>
             </div>
           </div>
 
           <div id="csvInput" style="display: none;">
             <div class="form-group">
               <label for="csvFile">Upload CSV File</label>
-              <input type="file" id="csvFile" accept=".csv" style="padding: 8px;">
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button type="button" id="downloadTemplate" class="btn-ghost" style="flex: 1;">📥 Download Template</button>
-                <button type="button" id="previewCsv" class="btn-ghost" style="flex: 1;">👁️ Preview Data</button>
+              <input type="file" id="csvFile" accept=".csv" class="file-input">
+              <div class="flex gap-2 mt-2">
+                <button type="button" id="downloadTemplate" class="btn-ghost flex-1">📥 Download Template</button>
+                <button type="button" id="previewCsv" class="btn-ghost flex-1">👁️ Preview Data</button>
               </div>
-              <small style="color: var(--muted); display: block; margin-top: 4px;">
+              <small class="helper-text">
                 CSV harus punya kolom: <strong>phone</strong> (wajib), <strong>name</strong> (opsional untuk personalisasi)
               </small>
             </div>
 
             <div id="csvPreview" style="display: none;">
               <label>Preview Data (<span id="previewCount">0</span> contacts)</label>
-              <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: rgba(0,0,0,0.2);">
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <div class="table-wrap">
+                <table class="table-basic">
                   <thead>
-                    <tr style="border-bottom: 1px solid var(--border);">
-                      <th style="text-align: left; padding: 8px;">#</th>
-                      <th style="text-align: left; padding: 8px;">Phone</th>
-                      <th style="text-align: left; padding: 8px;">Name</th>
+                    <tr class="table-head-row">
+                      <th class="table-cell">#</th>
+                      <th class="table-cell">Phone</th>
+                      <th class="table-cell">Name</th>
                     </tr>
                   </thead>
                   <tbody id="previewBody"></tbody>
                 </table>
               </div>
-              <div id="csvStats" style="margin-top: 8px; font-size: 13px; color: var(--muted);"></div>
+              <div id="csvStats" class="mt-2 text-xs text-slate-400"></div>
             </div>
           </div>
 
           <div class="form-group">
             <label for="broadcastMessage">Message</label>
             <textarea id="broadcastMessage" placeholder="Type your broadcast message here... Gunakan {name} untuk personalisasi." required></textarea>
-            <div id="personalizationHelper" style="display: none; margin-top: 8px;">
-              <small style="color: var(--accent);">
+            <div id="personalizationHelper" class="mt-2 hidden">
+              <small class="text-cyan-300">
                 💡 <strong>Personalisasi tersedia:</strong> Gunakan {name} dalam pesan untuk menyebut nama penerima.
                 <br>Contoh: "Halo {name}, kami ingin menginformasikan..."
               </small>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+          <div class="auto-grid-200 mb-4">
             <div>
               <label for="delayMin">Min Delay (ms)</label>
               <input type="number" id="delayMin" value="3000" min="0">
-              <small style="color: var(--muted);">Delay minimum antar pesan</small>
+              <small class="helper-text">Delay minimum antar pesan</small>
             </div>
             <div>
               <label for="delayMax">Max Delay (ms)</label>
               <input type="number" id="delayMax" value="8000" min="0">
-              <small style="color: var(--muted);">Delay maximum antar pesan</small>
+              <small class="helper-text">Delay maximum antar pesan</small>
             </div>
             <div>
               <label for="cooldownAfter">Cooldown After (messages)</label>
               <input type="number" id="cooldownAfter" value="30" min="0">
-              <small style="color: var(--muted);">Jeda setiap X pesan</small>
+              <small class="helper-text">Jeda setiap X pesan</small>
             </div>
             <div>
               <label for="cooldownMin">Cooldown Min (ms)</label>
               <input type="number" id="cooldownMin" value="120000" min="0" disabled>
-              <small style="color: var(--muted);">Durasi cooldown minimum</small>
+              <small class="helper-text">Durasi cooldown minimum</small>
             </div>
             <div>
               <label for="cooldownMax">Cooldown Max (ms)</label>
               <input type="number" id="cooldownMax" value="300000" min="0" disabled>
-              <small style="color: var(--muted);">Durasi cooldown maximum</small>
+              <small class="helper-text">Durasi cooldown maximum</small>
             </div>
           </div>
 
-          <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
-            <span id="estimatedTime" style="color: var(--accent);">Masukkan nomor untuk melihat estimasi</span>
+          <div class="info-banner mb-4">
+            <span id="estimatedTime" class="text-cyan-200">Masukkan nomor untuk melihat estimasi</span>
           </div>
 
           <button type="submit">Start Broadcast</button>
         </form>
 
-        <div class="log" id="broadcastResult" style="margin-top: 16px;"></div>
+        <div class="log mt-4" id="broadcastResult"></div>
       </div>
     </div>
 
@@ -382,7 +906,7 @@
 
       <div class="card">
         <h3 class="card-title">🔍 Filter Jobs</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+        <div class="auto-grid-200-tight mb-3">
           <div>
             <label>Filter Type</label>
             <select id="jobFilterType">
@@ -413,9 +937,9 @@
           </div>
         </div>
         <div class="btn-group">
-          <button type="button" id="applyJobFilter" class="btn-ghost" style="width: auto;">Apply Filter</button>
-          <button type="button" id="resetJobFilter" class="btn-ghost" style="width: auto;">Reset</button>
-          <button type="button" id="refreshJobs" class="btn-ghost" style="width: auto;">🔄 Refresh</button>
+          <button type="button" id="applyJobFilter" class="btn-ghost w-auto">Apply Filter</button>
+          <button type="button" id="resetJobFilter" class="btn-ghost w-auto">Reset</button>
+          <button type="button" id="refreshJobs" class="btn-ghost w-auto">🔄 Refresh</button>
         </div>
       </div>
 
@@ -486,7 +1010,7 @@
     </div>
 
     <!-- Chat View -->
-    <div id="view-chat" class="view">
+    <div id="view-chat" class="view view-flex">
       <div class="chat-container">
         <!-- Contacts Sidebar -->
         <div class="chat-contacts-sidebar">

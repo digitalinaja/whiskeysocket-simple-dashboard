@@ -60,7 +60,7 @@ function renderJobList(jobListParam = null) {
   document.getElementById('jobCount').textContent = list.length;
 
   if (!list.length) {
-    target.innerHTML = '<p style="color: var(--muted);">No jobs yet.</p>';
+    target.innerHTML = '<p class="text-muted">No jobs yet.</p>';
     return;
   }
 
@@ -68,17 +68,17 @@ function renderJobList(jobListParam = null) {
     const totals = j.totals || { sent: 0, skipped: 0, failed: 0, total: 0 };
     const phase = j.phase || j.status;
     const statusClass = j.status === 'completed' ? 'success' : j.status === 'failed' ? 'error' : 'warning';
-    const next = j.nextResumeAt ? `<br><small style="color: var(--muted);">Cooldown until ${new Date(j.nextResumeAt).toLocaleTimeString()}</small>` : '';
+    const next = j.nextResumeAt ? `<div class="job-next">Cooldown until ${new Date(j.nextResumeAt).toLocaleTimeString()}</div>` : '';
 
     const date = new Date(j.completedAt || j.startedAt || j.requestedAt);
     const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     return `
-      <div class="job-item" style="cursor: pointer;" onclick="viewJobDetail('${j.id}', '${j.sessionId}')">
+      <div class="job-item" onclick="viewJobDetail('${j.id}', '${j.sessionId}')">
         <div class="job-item-header">
           <span class="job-item-id">${j.id.substring(0, 8)}...</span>
           <span class="status-badge ${statusClass}">${j.status} (${phase})</span>
-          <span style="font-size: 12px; color: var(--muted); margin-left: auto;">${dateStr}</span>
+          <span class="job-item-date">${dateStr}</span>
         </div>
         <div class="job-item-stats">
           <div class="job-stat">
@@ -99,7 +99,7 @@ function renderJobList(jobListParam = null) {
           </div>
         </div>
         ${next}
-        <div style="margin-top: 8px; font-size: 12px; color: var(--muted);">Session: ${j.sessionId} | Click to view details →</div>
+        <div class="job-item-footer">Session: ${j.sessionId} | Click to view details →</div>
       </div>
     `;
   }).join('');
