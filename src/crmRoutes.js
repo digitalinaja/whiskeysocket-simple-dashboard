@@ -586,4 +586,109 @@ router.post('/contacts/:contactId/sync-history', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/messages/:messageId/media
+ * Download media file for a message
+ */
+router.get('/messages/:messageId/media', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { sessionId } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    // Get message from database
+    const connection = getPool();
+    const [messages] = await connection.query(
+      `SELECT * FROM messages WHERE id = ? AND session_id = ?`,
+      [messageId, sessionId]
+    );
+
+    if (messages.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const message = messages[0];
+
+    // Check if raw_message exists
+    if (!message.raw_message) {
+      return res.status(404).json({ error: 'Raw message data not found. Please resend the media message or sync history again.' });
+    }
+
+    // Parse raw_message JSON (now contains full IWebMessageInfo object)
+    let rawMessage;
+    try {
+      rawMessage = typeof message.raw_message === 'string' ? JSON.parse(message.raw_message) : message.raw_message;
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to parse raw message data' });
+    }
+
+    // Use Baileys downloadContentFromMessage function
+    const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+
+    // Determine the message type for downloadContentFromMessage
+    // This must match the key in rawMessage.message (imageMessage, videoMessage, etc.)
+    let mediaType;
+    if (rawMessage.message?.imageMessage) {
+      mediaType = 'image';
+    } else if (rawMessage.message?.videoMessage) {
+      mediaType = 'video';
+    } else if (rawMessage.message?.audioMessage) {
+      mediaType = 'audio';
+    } else if (rawMessage.message?.documentMessage) {
+      mediaType = 'document';
+    } else {
+      return res.status(400).json({ error: 'Unknown media type in message' });
+    }
+
+    console.log(`Downloading media: type=${mediaType}, messageId=${messageId}`);
+    console.log(`Has message.message:`, !!rawMessage.message);
+    console.log(`Message keys:`, Object.keys(rawMessage.message || {}));
+
+    // Download media as stream (rawMessage is already IWebMessageInfo format)
+    const stream = await downloadContentFromMessage(rawMessage, mediaType);
+
+    if (!stream) {
+      return res.status(500).json({ error: 'Failed to download media' });
+    }
+
+    // Convert stream to buffer
+    const buffer = await streamToBuffer(stream);
+
+    // Determine content type based on message type
+    const contentTypeMap = {
+      'image': 'image/jpeg',
+      'video': 'video/mp4',
+      'audio': 'audio/mpeg',
+      'document': 'application/octet-stream'
+    };
+
+    const contentType = contentTypeMap[message.message_type] || 'application/octet-stream';
+
+    // Set headers and send the media
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="media_${messageId}.${message.message_type}"`);
+    res.send(buffer);
+
+    console.log(`✓ Media downloaded successfully: ${messageId}`);
+  } catch (error) {
+    console.error('Error downloading media:', error);
+    res.status(500).json({ error: 'Failed to download media: ' + error.message });
+  }
+});
+
+/**
+ * Helper function to convert stream to buffer
+ */
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
 module.exports = router;

@@ -9,6 +9,7 @@ yarn-error.log*
 .env.*.local
 auth/
 jobs/
+media/
 *.md
 .vscode/
 .idea/

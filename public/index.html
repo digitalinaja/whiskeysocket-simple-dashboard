@@ -3063,15 +3063,94 @@
 
       container.innerHTML = messages.map(msg => {
         const isOutgoing = msg.direction === 'outgoing';
+        const isDeleted = msg.isDeleted || msg.content === '[This message was deleted]';
         const time = formatMessageTime(msg.timestamp);
 
+        // Render media content based on message type
+        let mediaContent = '';
+        if (msg.type === 'image' && msg.mediaUrl) {
+          // Check if it's a local file (filename) or API URL
+          const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
+          mediaContent = `
+            <div class="message-media">
+              <img src="${mediaSrc}"
+                   alt="${escapeHtml(msg.content)}"
+                   style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer;"
+                   onclick="window.open(this.src, '_blank')"
+                   onerror="this.parentElement.innerHTML='<span style=\\'color: var(--muted)\\'>Failed to load image</span>'" />
+            </div>
+          `;
+        } else if (msg.type === 'video' && msg.mediaUrl) {
+          const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
+          mediaContent = `
+            <div class="message-media">
+              <video controls
+                     style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                <source src="${mediaSrc}" type="video/mp4">
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          `;
+        } else if (msg.type === 'audio' && msg.mediaUrl) {
+          const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
+          mediaContent = `
+            <div class="message-media">
+              <audio controls style="width: 100%; max-width: 300px;">
+                <source src="${mediaSrc}" type="audio/mpeg">
+                Your browser does not support the audio tag.
+              </audio>
+            </div>
+          `;
+        } else if (msg.type === 'document' && msg.mediaUrl) {
+          const mediaSrc = msg.mediaUrl.startsWith('http') ? `/api/messages/${msg.id}/media?sessionId=${chatState.currentSession}` : `/media/${msg.mediaUrl}`;
+          mediaContent = `
+            <div class="message-media">
+              <a href="${mediaSrc}"
+                 target="_blank"
+                 download
+                 style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(0,0,0,0.1); border-radius: 6px; text-decoration: none; color: inherit;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>${escapeHtml(msg.content)}</span>
+              </a>
+            </div>
+          `;
+        } else if (msg.type === 'location') {
+          mediaContent = `
+            <div class="message-media">
+              <span style="color: var(--muted); font-style: italic;">📍 ${escapeHtml(msg.content)}</span>
+            </div>
+          `;
+        } else if (msg.type === 'contact') {
+          mediaContent = `
+            <div class="message-media">
+              <span style="color: var(--muted); font-style: italic;">👤 ${escapeHtml(msg.content)}</span>
+            </div>
+          `;
+        }
+
+        // For text messages or messages without media, show the content
+        let textContent = '';
+        if (isDeleted) {
+          // Show deleted message style
+          textContent = `<span style="color: var(--muted); font-style: italic;">🗑️ ${escapeHtml(msg.content)}</span>`;
+        } else if (msg.type === 'text' || (!msg.mediaUrl && !mediaContent)) {
+          textContent = escapeHtml(msg.content);
+        } else if (msg.content && msg.content !== '[Image]' && msg.content !== '[Video]' && msg.content !== '[Audio]' && msg.content !== '[Document]') {
+          // Show caption for media messages
+          textContent = `<div style="margin-top: 8px;">${escapeHtml(msg.content)}</div>`;
+        }
+
         return `
-          <div class="message ${isOutgoing ? 'outgoing' : 'incoming'}">
-            <div class="message-bubble">
-              ${escapeHtml(msg.content)}
+          <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}">
+            <div class="message-bubble" style="${isDeleted ? 'background: rgba(0,0,0,0.03); opacity: 0.7;' : ''}">
+              ${!isDeleted ? mediaContent : ''}
+              ${textContent}
               <div class="message-time">
                 ${time}
-                ${isOutgoing ? `<span class="message-status">${getMessageStatusIcon(msg.status)}</span>` : ''}
+                ${isOutgoing && !isDeleted ? `<span class="message-status">${getMessageStatusIcon(msg.status)}</span>` : ''}
               </div>
             </div>
           </div>
@@ -3183,6 +3262,27 @@
 
         // Update contacts list
         renderChatContactsList();
+      }
+    });
+
+    // Handle message deletion
+    socket.on('chat.messageDeleted', (data) => {
+      const { sessionId, messageId, contactId } = data;
+
+      // Update messages if in same session
+      if (sessionId === chatState.currentSession && chatState.messages[contactId]) {
+        // Find and update the deleted message
+        const messageIndex = chatState.messages[contactId].findIndex(msg => msg.messageId === messageId);
+
+        if (messageIndex !== -1) {
+          chatState.messages[contactId][messageIndex].content = '[This message was deleted]';
+          chatState.messages[contactId][messageIndex].isDeleted = true;
+
+          // If this is the current chat, render
+          if (chatState.currentContact?.id === contactId) {
+            renderMessages();
+          }
+        }
       }
     });
 

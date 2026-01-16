@@ -41,6 +41,8 @@ function randomBetween(min, max) {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
+// Serve media folder for downloaded media files
+app.use('/media', express.static(path.join(__dirname, "..", "media")));
 
 // Session middleware for Google OAuth
 app.use(session({

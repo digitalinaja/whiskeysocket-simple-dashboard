@@ -77,6 +77,7 @@ async function initDatabase() {
         message_type ENUM('text', 'image', 'video', 'audio', 'document', 'location', 'contact') DEFAULT 'text',
         content TEXT,
         media_url TEXT,
+        raw_message JSON,
         timestamp TIMESTAMP NOT NULL,
         status ENUM('sent', 'delivered', 'read', 'failed') DEFAULT 'sent',
         is_deleted BOOLEAN DEFAULT FALSE,
@@ -88,6 +89,20 @@ async function initDatabase() {
         INDEX idx_direction (direction)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    // Add raw_message column if it doesn't exist (for existing databases)
+    try {
+      await connection.query(`
+        ALTER TABLE messages ADD COLUMN raw_message JSON AFTER media_url
+      `);
+      console.log('✓ Added raw_message column to messages table');
+    } catch (err) {
+      // Column might already exist, ignore error
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.log('Note: raw_message column check:', err.message);
+      }
+    }
+
     console.log('✓ messages table created/verified');
 
     // Create tags table

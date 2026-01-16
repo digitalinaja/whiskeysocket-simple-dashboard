@@ -1,4 +1,89 @@
 const { getPool, createDefaultLeadStatuses } = require('./database');
+const fs = require('fs');
+const path = require('path');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+
+/**
+ * Download and save media file locally
+ */
+async function saveMediaLocally(rawMessage, messageId, messageType) {
+  try {
+    // Find the media message key (e.g., 'imageMessage', 'videoMessage', etc.)
+    const mediaMessageKey = Object.keys(rawMessage.message || {}).find(k => k.endsWith('Message') && k !== 'conversation' && k !== 'extendedTextMessage');
+
+    if (!mediaMessageKey) {
+      console.log(`⚠️ No media message found in raw message`);
+      return null;
+    }
+
+    // Extract media type from key (e.g., 'imageMessage' -> 'image')
+    const mediaType = mediaMessageKey.replace('Message', '');
+    const mediaContent = rawMessage.message[mediaMessageKey];
+
+    console.log(`💾 Downloading media locally: ${mediaType}, messageId: ${messageId}`);
+    console.log(`   Media message key: ${mediaMessageKey}`);
+
+    // Create media directory if not exists
+    const mediaDir = path.join(__dirname, '../media');
+    if (!fs.existsSync(mediaDir)) {
+      fs.mkdirSync(mediaDir, { recursive: true });
+    }
+
+    // Download media stream - pass the specific media message object, not the full raw message
+    const stream = await downloadContentFromMessage(mediaContent, mediaType);
+
+    // Convert stream to buffer
+    const buffer = await streamToBuffer(stream);
+
+    // Determine file extension based on media type and mimetype
+    let ext = 'bin';
+    if (mediaContent.mimetype) {
+      const mimeToExt = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+        'video/mp4': 'mp4',
+        'audio/mpeg': 'mp3',
+        'audio/mp4': 'm4a',
+        'audio/ogg': 'ogg',
+        'application/pdf': 'pdf',
+      };
+      ext = mimeToExt[mediaContent.mimetype] || mediaType.substring(0, 3);
+    } else {
+      const extMap = {
+        'image': 'jpg',
+        'video': 'mp4',
+        'audio': 'mp3',
+        'document': 'bin'
+      };
+      ext = extMap[mediaType] || 'bin';
+    }
+
+    // Save file
+    const filename = `${messageId}.${ext}`;
+    const filepath = path.join(mediaDir, filename);
+    fs.writeFileSync(filepath, buffer);
+
+    console.log(`✓ Media saved locally: ${filename} (${(buffer.length / 1024).toFixed(2)} KB)`);
+    return filename;
+  } catch (error) {
+    console.error('Error saving media locally:', error);
+    return null;
+  }
+}
+
+/**
+ * Helper function to convert stream to buffer
+ */
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
 
 /**
  * Normalize phone number to international format
@@ -121,11 +206,96 @@ async function handleIncomingMessage(sessionId, message, io, messageType = 'noti
       console.log(`⚠️ @lid JID with no remoteJidAlt - using pushName "${pushName}" workaround`);
     }
 
-    const messageContent = message.message?.conversation ||
+    // Extract content and media URL
+    let messageContent = message.message?.conversation ||
                           message.message?.extendedTextMessage?.text ||
-                          message.message?.imageMessage?.caption ||
                           '[Media]';
+    let mediaUrl = null;
+
+    // Extract media URL for different message types
     const msgType = getMessageType(message);
+
+    // Handle protocolMessage (REVOKE - delete message)
+    if (msgType === 'protocol') {
+      const protoMsg = message.message?.protocolMessage;
+
+      // Debug log
+      console.log(`🔍 Protocol message detected:`, {
+        type: protoMsg?.type,
+        typeValue: protoMsg?.type?.valueOf(),
+        hasKey: !!protoMsg?.key,
+        keyId: protoMsg?.key?.id
+      });
+
+      if (protoMsg?.type === 0 || protoMsg?.type === 'REVOKE') {
+        // Type 0 = REVOKE in Baileys
+        const revokedMessageId = protoMsg.key?.id;
+
+        if (revokedMessageId) {
+          console.log(`🗑️ Message revoke detected: ${revokedMessageId}`);
+
+          // Get the deleted message's contact_id first
+          const [deletedMsg] = await connection.query(
+            `SELECT contact_id FROM messages WHERE message_id = ? AND session_id = ?`,
+            [revokedMessageId, sessionId]
+          );
+
+          if (deletedMsg.length > 0) {
+            const contactId = deletedMsg[0].contact_id;
+
+            // Update the deleted message in database
+            await connection.query(
+              `UPDATE messages SET content = '[This message was deleted]', is_deleted = TRUE WHERE message_id = ? AND session_id = ?`,
+              [revokedMessageId, sessionId]
+            );
+
+            console.log(`✓ Message marked as deleted: ${revokedMessageId}`);
+
+            // Emit Socket.io event for real-time update
+            if (io && messageType === 'notify') {
+              io.emit('chat.messageDeleted', {
+                sessionId,
+                messageId: revokedMessageId,
+                contactId: contactId
+              });
+            }
+          } else {
+            console.log(`⚠️ Deleted message not found in database: ${revokedMessageId}`);
+          }
+        }
+      } else {
+        console.log(`ℹ️ Protocol message type: ${protoMsg?.type} (not REVOKE)`);
+      }
+
+      // Don't save any protocol messages to database
+      return;
+    }
+
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+      // For image messages
+      if (message.message?.imageMessage) {
+        const imgMsg = message.message.imageMessage;
+        messageContent = imgMsg.caption || '[Image]';
+        mediaUrl = imgMsg.url || null;
+      }
+      // For video messages
+      else if (message.message?.videoMessage) {
+        const vidMsg = message.message.videoMessage;
+        messageContent = vidMsg.caption || '[Video]';
+        mediaUrl = vidMsg.url || null;
+      }
+      // For audio messages
+      else if (message.message?.audioMessage) {
+        mediaUrl = message.message.audioMessage.url || null;
+      }
+      // For document messages
+      else if (message.message?.documentMessage) {
+        const docMsg = message.message.documentMessage;
+        messageContent = docMsg.caption || docMsg.fileName || '[Document]';
+        mediaUrl = docMsg.url || null;
+      }
+    }
+
     const timestamp = new Date(message.messageTimestamp * 1000);
     const isFromMe = fromMe;
     const direction = isFromMe ? 'outgoing' : 'incoming';
@@ -159,10 +329,27 @@ async function handleIncomingMessage(sessionId, message, io, messageType = 'noti
     }
 
     await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, direction, msgType, messageContent, timestamp, isFromMe ? 'sent' : 'delivered']
+      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
     );
+
+    // Download and save media locally if it's a media message
+    let localMediaPath = null;
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+      try {
+        localMediaPath = await saveMediaLocally(message, messageId, msgType);
+        if (localMediaPath) {
+          // Update database with local media path
+          await connection.query(
+            `UPDATE messages SET media_url = ? WHERE message_id = ? AND session_id = ?`,
+            [localMediaPath, messageId, sessionId]
+          );
+        }
+      } catch (err) {
+        console.error('Failed to save media locally:', err);
+      }
+    }
 
     // Update last_interaction_at for contact
     await connection.query(
@@ -179,6 +366,7 @@ async function handleIncomingMessage(sessionId, message, io, messageType = 'noti
           direction: direction,
           content: messageContent,
           type: msgType,
+          mediaUrl: localMediaPath || mediaUrl,  // Use local path if available
           timestamp: timestamp.toISOString(),
           status: isFromMe ? 'sent' : 'delivered'
         },
@@ -431,7 +619,7 @@ async function getContactHistory(sessionId, contactId, limit = 50) {
   try {
     const [messages] = await connection.query(
       `SELECT * FROM messages
-       WHERE session_id = ? AND contact_id = ? AND is_deleted = FALSE
+       WHERE session_id = ? AND contact_id = ?
        ORDER BY timestamp ASC
        LIMIT ?`,
       [sessionId, contactId, limit]
@@ -445,7 +633,8 @@ async function getContactHistory(sessionId, contactId, limit = 50) {
       content: m.content,
       mediaUrl: m.media_url,
       timestamp: m.timestamp,
-      status: m.status
+      status: m.status,
+      isDeleted: m.is_deleted
     }));
   } catch (error) {
     console.error('Error getting message history:', error);
@@ -705,15 +894,35 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
 
       const message = msgData.message;
 
-      // Extract message data
-      const messageContent = message?.conversation ||
+      // Extract message data and media URL
+      let messageContent = message?.conversation ||
                             message?.extendedTextMessage?.text ||
-                            message?.imageMessage?.caption ||
                             '[Media]';
-
-      if (!messageContent) continue;
+      let mediaUrl = null;
 
       const messageType = getMessageType({ message });
+
+      // Extract media URL for different message types
+      if (messageType !== 'text' && messageType !== 'location' && messageType !== 'contact') {
+        if (message?.imageMessage) {
+          const imgMsg = message.imageMessage;
+          messageContent = imgMsg.caption || '[Image]';
+          mediaUrl = imgMsg.url || null;
+        } else if (message?.videoMessage) {
+          const vidMsg = message.videoMessage;
+          messageContent = vidMsg.caption || '[Video]';
+          mediaUrl = vidMsg.url || null;
+        } else if (message?.audioMessage) {
+          mediaUrl = message.audioMessage.url || null;
+        } else if (message?.documentMessage) {
+          const docMsg = message.documentMessage;
+          messageContent = docMsg.caption || docMsg.fileName || '[Document]';
+          mediaUrl = docMsg.url || null;
+        }
+      }
+
+      if (!messageContent && !mediaUrl) continue;
+
       const timestamp = new Date(msgData.messageTimestamp * 1000);
 
       // Determine direction
@@ -722,8 +931,8 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
 
       // Insert into database
       await connection.query(
-        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           contactId,
@@ -731,6 +940,8 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
           direction,
           messageType,
           messageContent,
+          mediaUrl,
+          JSON.stringify(msgData),  // Store full msgData object (includes key, message, etc.)
           timestamp,
           isFromMe ? 'sent' : 'delivered'
         ]
@@ -766,6 +977,7 @@ function getMessageType(message) {
   if (message.message?.documentMessage) return 'document';
   if (message.message?.locationMessage) return 'location';
   if (message.message?.contactMessage) return 'contact';
+  if (message.message?.protocolMessage) return 'protocol';
   return 'text';
 }
 
