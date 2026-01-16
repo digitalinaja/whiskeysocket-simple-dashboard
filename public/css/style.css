@@ -1,0 +1,559 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans min-h-screen md:flex;
+  }
+  h1, h2, h3, h4 {
+    @apply text-slate-50;
+  }
+  a {
+    @apply text-slate-200;
+  }
+  input, textarea, select {
+    @apply w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
+  }
+  button {
+    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400 transition;
+  }
+  table {
+    @apply w-full text-sm;
+  }
+  th {
+    @apply text-left text-slate-300 font-medium;
+  }
+  td {
+    @apply text-slate-200;
+  }
+  :root[data-theme='light'] body {
+    @apply bg-slate-100 text-slate-900;
+  }
+  :root[data-theme='light'] a {
+    @apply text-slate-700;
+  }
+  :root[data-theme='light'] input,
+  :root[data-theme='light'] textarea,
+  :root[data-theme='light'] select {
+    @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-500;
+  }
+  :root[data-theme='light'] button {
+    @apply text-slate-900;
+  }
+}
+
+@layer components {
+  .mobile-menu-toggle {
+    @apply fixed left-4 top-4 z-50 rounded-lg bg-slate-800/80 px-3 py-2 text-slate-100 md:hidden;
+  }
+  .theme-toggle {
+    @apply fixed right-4 top-4 z-40 hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-200 md:flex;
+  }
+  .sidebar {
+    @apply fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-slate-800 bg-slate-900/80 backdrop-blur transition-transform duration-200 md:static md:translate-x-0;
+  }
+  .sidebar.open {
+    @apply translate-x-0;
+  }
+  .sidebar.collapsed {
+    @apply md:w-20;
+  }
+  .sidebar.collapsed .nav-section-title,
+  .sidebar.collapsed .nav-item span:not(.icon),
+  .sidebar.collapsed .sidebar-header h1 {
+    @apply hidden;
+  }
+  .sidebar.collapsed .nav-item {
+    @apply justify-center;
+  }
+  .sidebar-header {
+    @apply px-5 py-6;
+  }
+  .sidebar-header h1 {
+    @apply flex items-center gap-3 text-lg font-semibold;
+  }
+  .logo-icon {
+    @apply flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500 text-slate-950 font-bold;
+  }
+  .nav-menu {
+    @apply px-3 pb-6;
+  }
+  .nav-section {
+    @apply mb-6;
+  }
+  .nav-section-title {
+    @apply mb-2 px-3 text-xs uppercase tracking-wide text-slate-500;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-50 transition;
+  }
+  .nav-item.active {
+    @apply bg-slate-800 text-slate-50;
+  }
+  .main-content {
+    @apply min-h-screen flex-1 px-5 py-6 md:px-8;
+  }
+  .main-content.expanded {
+    @apply md:ml-0;
+  }
+  .page-header {
+    @apply mb-6;
+  }
+  .page-title {
+    @apply text-2xl font-semibold;
+  }
+  .page-subtitle {
+    @apply text-sm text-slate-400;
+  }
+  .card {
+    @apply rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm;
+  }
+  .card-title {
+    @apply mb-4 text-sm font-semibold text-slate-200;
+  }
+  .stats-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6;
+  }
+  .stat-card {
+    @apply flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+  }
+  .stat-icon {
+    @apply text-2xl;
+  }
+  .stat-label {
+    @apply text-xs text-slate-400;
+  }
+  .stat-value {
+    @apply text-xl font-semibold;
+  }
+  .status-badge {
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-slate-200;
+  }
+  .status-dot {
+    @apply h-2 w-2 rounded-full bg-slate-400;
+  }
+  .btn-group {
+    @apply flex flex-wrap gap-2;
+  }
+  .btn-ghost {
+    @apply rounded-lg border border-slate-700 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-slate-800;
+  }
+  .btn-danger {
+    @apply rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-400;
+  }
+  .btn-primary {
+    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400;
+  }
+  .btn-sm {
+    @apply rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700;
+  }
+  .btn-icon {
+    @apply rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm text-slate-200 hover:bg-slate-700;
+  }
+  .btn-send {
+    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400;
+  }
+  .log {
+    @apply rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300;
+  }
+  .qr-box {
+    @apply flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-6;
+  }
+  .view {
+    @apply hidden;
+  }
+  .view.active {
+    @apply block;
+  }
+  .view-flex.active {
+    @apply flex;
+  }
+  .chat-container {
+    @apply grid gap-4 lg:grid-cols-3;
+    height: 100vh;
+  }
+  .chat-contacts-sidebar {
+    @apply flex flex-col min-h-0 h-full rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+  }
+  .chat-window {
+    @apply lg:col-span-2 flex flex-col min-h-0 h-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60;
+  }
+  .chat-window-header {
+    @apply flex items-center justify-between border-b border-slate-800 p-4;
+  }
+  .chat-header {
+    @apply flex flex-col gap-3;
+  }
+  .search-box {
+    @apply relative;
+  }
+  .chat-welcome {
+    @apply flex flex-1 flex-col items-center justify-center gap-3 text-slate-400;
+  }
+  .welcome-icon {
+    @apply text-4xl;
+  }
+  .contact-avatar {
+    @apply flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-slate-200;
+  }
+  .contact-item-info {
+    @apply flex-1 overflow-hidden;
+  }
+  .contact-item-name {
+    @apply text-sm font-medium text-slate-100;
+  }
+  .contact-item:hover .contact-item-name {
+    @apply text-white;
+  }
+  .contact-item-preview {
+    @apply text-xs text-slate-400 truncate;
+  }
+  .contact-item-meta {
+    @apply text-xs text-slate-500;
+  }
+  .contacts-list {
+    @apply mt-4 flex-1 space-y-2 overflow-y-auto;
+    max-height: calc(100vh - 200px);
+  }
+  .contact-item {
+    @apply flex items-center gap-3 rounded-lg border border-transparent p-2 hover:bg-slate-800 hover:border-slate-700 cursor-pointer;
+  }
+  .contact-item.active {
+    @apply border-slate-700 bg-slate-800;
+  }
+  .messages-container {
+    @apply flex-1 overflow-y-auto p-4 space-y-3;
+    max-height: calc(100vh - 200px);
+  }
+  .message-input-area {
+    @apply border-t border-slate-800 p-4;
+  }
+  .message-input-wrapper {
+    @apply flex items-end gap-2;
+  }
+  .crm-toolbar {
+    @apply mb-4 flex flex-wrap items-center justify-between gap-3;
+  }
+  .contact-count {
+    @apply text-sm text-slate-300;
+  }
+  .sync-buttons {
+    @apply flex flex-wrap gap-2;
+  }
+  .google-status,
+  .google-notice {
+    @apply mt-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-300;
+  }
+  .contact-card-header {
+    @apply flex items-center gap-3;
+  }
+  .contact-card-avatar {
+    @apply flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-slate-200;
+  }
+  .contact-card-info {
+    @apply flex-1;
+  }
+  .contact-card-name {
+    @apply text-sm font-semibold;
+  }
+  .contact-card-phone {
+    @apply text-xs text-slate-400;
+  }
+  .contact-card-tags {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+  .tag-badge,
+  .lead-status-badge {
+    @apply rounded-full px-2 py-1 text-[11px] font-medium;
+  }
+  .contact-card-meta {
+    @apply mt-3 flex items-center justify-between text-xs text-slate-400;
+  }
+  .pagination {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+  .session-selector {
+    @apply mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-300;
+  }
+  .session-selector-row {
+    @apply flex-1 min-w-[200px];
+  }
+  .form-group {
+    @apply mb-4;
+  }
+  .form-group label {
+    @apply mb-1 block text-xs font-medium text-slate-300;
+  }
+  .crm-container {
+    @apply grid gap-4 lg:grid-cols-4;
+  }
+  .crm-filters-sidebar {
+    @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4;
+  }
+  .crm-contacts-grid {
+    @apply lg:col-span-3;
+  }
+  .contacts-cards {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+  .contact-card {
+    @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 transition;
+  }
+  .modal {
+    @apply fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4;
+  }
+  .modal.active {
+    @apply flex;
+  }
+  .modal-content {
+    @apply w-full max-w-2xl rounded-xl border border-slate-800 bg-slate-900 p-0;
+  }
+  .modal-body {
+    @apply p-6 max-h-[70vh] overflow-y-auto;
+  }
+  .modal-header {
+    @apply flex items-center justify-between border-b border-slate-800 pb-3;
+  }
+  .modal-close {
+    @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200;
+  }
+  .job-list {
+    @apply space-y-3;
+  }
+  .text-muted {
+    @apply text-slate-400;
+  }
+  .empty-state {
+    @apply py-10 text-center text-slate-400;
+  }
+  .auto-grid-200 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    @apply gap-4;
+  }
+  .auto-grid-200-tight {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    @apply gap-3;
+  }
+  .info-banner {
+    @apply rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-200;
+  }
+  .helper-text {
+    @apply mt-1 block text-xs text-slate-400;
+  }
+  .file-input {
+    @apply rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100;
+  }
+  .table-wrap {
+    @apply max-h-52 overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/40 p-3;
+  }
+  .table-head-row {
+    @apply border-b border-slate-800;
+  }
+  .table-basic {
+    @apply w-full text-xs;
+    border-collapse: collapse;
+  }
+  .table-cell {
+    @apply px-2 py-2 text-left text-xs font-medium text-slate-300;
+  }
+  .sidebar-collapse {
+    @apply absolute -right-3 top-6 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 md:flex;
+  }
+  .contact-info {
+    @apply flex items-center gap-3;
+  }
+  .contact-details {
+    @apply flex flex-col;
+  }
+  .contact-name {
+    @apply text-sm font-semibold;
+  }
+  .contact-phone {
+    @apply text-xs text-slate-400;
+  }
+  .chat-actions {
+    @apply flex items-center gap-2;
+  }
+  .chat-conversation {
+    @apply flex flex-1 flex-col;
+  }
+  .crm-quick-actions {
+    @apply mb-2 flex flex-wrap gap-2;
+  }
+  .message {
+    @apply flex;
+  }
+  .message.incoming {
+    @apply justify-start;
+  }
+  .message.outgoing {
+    @apply justify-end;
+  }
+  .message-bubble {
+    @apply max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm;
+  }
+  .message.incoming .message-bubble {
+    @apply bg-slate-800 text-slate-100;
+  }
+  .message.outgoing .message-bubble {
+    @apply bg-cyan-500/90 text-slate-950;
+  }
+  .message.deleted .message-bubble {
+    @apply bg-slate-900/40 text-slate-400;
+  }
+  .message-time {
+    @apply mt-1 flex items-center justify-end gap-1 text-[10px] opacity-70;
+  }
+  .message-status {
+    @apply ml-1;
+  }
+  .message-media {
+    @apply mb-2 overflow-hidden rounded-lg border border-slate-700;
+  }
+  .message-media-image {
+    @apply block max-h-[300px] max-w-full cursor-zoom-in;
+  }
+  .job-item {
+    @apply cursor-pointer rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 transition;
+  }
+  .job-item-header {
+    @apply flex items-center gap-3;
+  }
+  .job-item-id {
+    @apply text-xs font-semibold text-slate-300;
+  }
+  .job-item-date {
+    @apply ml-auto text-xs text-slate-400;
+  }
+  .job-item-stats {
+    @apply mt-3 grid grid-cols-2 gap-3 md:grid-cols-4;
+  }
+  .job-stat {
+    @apply rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-center;
+  }
+  .job-stat-label {
+    @apply text-xs text-slate-400;
+  }
+  .job-stat-value {
+    @apply text-lg font-semibold text-slate-100;
+  }
+  .job-next {
+    @apply mt-2 text-xs text-slate-400;
+  }
+  .job-item-footer {
+    @apply mt-2 text-xs text-slate-400;
+  }
+  .status-badge.success {
+    @apply border-emerald-400/40 bg-emerald-400/15 text-emerald-200;
+  }
+  .status-badge.warning {
+    @apply border-amber-400/40 bg-amber-400/15 text-amber-200;
+  }
+  .status-badge.error {
+    @apply border-rose-400/40 bg-rose-400/15 text-rose-200;
+  }
+  :root[data-theme='light'] .sidebar {
+    @apply bg-white/90 border-slate-200;
+  }
+  :root[data-theme='light'] .nav-item {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+  :root[data-theme='light'] .nav-item.active {
+    @apply bg-slate-200 text-slate-900;
+  }
+  :root[data-theme='light'] .card,
+  :root[data-theme='light'] .chat-contacts-sidebar,
+  :root[data-theme='light'] .chat-window,
+  :root[data-theme='light'] .crm-filters-sidebar,
+  :root[data-theme='light'] .contact-card,
+  :root[data-theme='light'] .modal-content {
+    @apply bg-white border-slate-200;
+  }
+  :root[data-theme='light'] .status-badge {
+    @apply bg-slate-100 border-slate-200 text-slate-700;
+  }
+  :root[data-theme='light'] .log {
+    @apply bg-slate-100 border-slate-200 text-slate-700;
+  }
+  :root[data-theme='light'] .contact-item.active {
+    @apply bg-slate-100 border-slate-200;
+  }
+  :root[data-theme='light'] .contact-item:hover {
+    @apply bg-slate-100 border-slate-200;
+  }
+  :root[data-theme='light'] .contact-item-name {
+    @apply text-slate-900;
+  }
+  :root[data-theme='light'] .contact-item:hover .contact-item-name {
+    @apply text-slate-800;
+  }
+  :root[data-theme='light'] h1,
+  :root[data-theme='light'] h2,
+  :root[data-theme='light'] h3,
+  :root[data-theme='light'] h4 {
+    @apply text-slate-900;
+  }
+  :root[data-theme='light'] .message-input-area,
+  :root[data-theme='light'] .chat-window-header {
+    @apply border-slate-200;
+  }
+  :root[data-theme='light'] .message.incoming .message-bubble {
+    @apply bg-slate-100 text-slate-900;
+  }
+  :root[data-theme='light'] .message.outgoing .message-bubble {
+    @apply bg-cyan-300 text-slate-900;
+  }
+  :root[data-theme='light'] .job-item,
+  :root[data-theme='light'] .job-stat {
+    @apply bg-white border-slate-200;
+  }
+  :root[data-theme='light'] .message-media {
+    @apply border-slate-200;
+  }
+  .contact-detail-header {
+    @apply text-center mb-6;
+  }
+  .contact-detail-header .contact-avatar {
+    @apply w-16 h-16 mx-auto mb-3 text-xl font-bold;
+  }
+  .contact-detail-header h3 {
+    @apply text-lg font-semibold mb-1;
+  }
+  .contact-detail-section {
+    @apply mb-6;
+  }
+  .contact-detail-section h4 {
+    @apply text-sm font-medium text-slate-300 mb-3;
+  }
+  .contact-tags-list {
+    @apply flex flex-wrap gap-2;
+  }
+  .tag-management {
+    @apply mt-4 space-y-4;
+  }
+  .tag-input-row {
+    @apply flex flex-wrap gap-2;
+  }
+  .note-item {
+    @apply p-3 rounded-lg border border-slate-800 bg-slate-900/40 mb-3;
+  }
+  .modal-actions {
+    @apply flex justify-end gap-3 mt-6 pt-4 border-t border-slate-800;
+  }
+  :root[data-theme='light'] .contact-detail-section h4 {
+    @apply text-slate-700;
+  }
+  :root[data-theme='light'] .note-item {
+    @apply bg-white border-slate-200;
+  }
+  :root[data-theme='light'] .text-muted {
+    @apply text-slate-500;
+  }
+  :root[data-theme='light'] .modal {
+    @apply bg-black/50;
+  }
+  :root[data-theme='light'] .modal-content {
+    @apply bg-white border-slate-200;
+  }
+}

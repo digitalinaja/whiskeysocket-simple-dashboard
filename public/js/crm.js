@@ -243,12 +243,22 @@ function renderCRMStatusFilters() {
 /**
  * Show contact detail modal
  */
-async function showContactDetailModal(contactId) {
+async function showContactDetailModal(contactId, sessionId = null) {
   const modal = document.getElementById('contactDetailModal');
   modal.classList.add('active');
 
+  // Use provided sessionId or fall back to crmState.currentSession
+  const activeSessionId = sessionId || crmState.currentSession;
+
+  // Ensure CRM data is loaded before showing modal
+  if (!crmState.currentSession || crmState.currentSession !== activeSessionId) {
+    crmState.currentSession = activeSessionId;
+    await loadCRMTags(activeSessionId);
+    await loadCRMLeadStatuses(activeSessionId);
+  }
+
   try {
-    const res = await fetch(`/api/contacts/${contactId}?sessionId=${crmState.currentSession}`);
+    const res = await fetch(`/api/contacts/${contactId}?sessionId=${activeSessionId}`);
     const data = await res.json();
 
     if (res.ok) {
@@ -271,13 +281,21 @@ function renderContactDetailModal(contact) {
   modalBody.innerHTML = `
     <div class="contact-detail-header">
       <div class="contact-avatar">${contact.name ? contact.name[0] : '?'}</div>
-      <h3>${contact.name || 'Unknown'}</h3>
-      <p style="color: var(--muted);">${contact.phone}</p>
+      <div class="contact-detail-info">
+        <h3 id="contactNameHeading">${contact.name || 'Unnamed Contact'}</h3>
+        <p class="text-muted">${contact.phone}</p>
+        <div class="form-group mt-4">
+          <label for="contactNameInput">Display Name</label>
+          <input id="contactNameInput" type="text" value="${escapeHtml(contact.name || '')}" placeholder="Enter contact name">
+        </div>
+        <div class="helper-text">Update the display name used across chat and CRM.</div>
+        <button id="saveContactNameBtn" class="btn-sm" style="margin-top: 8px;">💾 Save Name</button>
+      </div>
     </div>
 
     <div class="contact-detail-section">
       <h4>Lead Status</h4>
-      <select id="contactStatusSelect">
+      <select id="contactStatusSelect" class="form-group">
         ${Object.values(crmState.leadStatuses).map(s =>
           `<option value="${s.id}" ${s.id === contact.leadStatusId ? 'selected' : ''}>${s.name}</option>`
         ).join('')}
@@ -288,10 +306,31 @@ function renderContactDetailModal(contact) {
       <h4>Tags</h4>
       <div class="contact-tags-list">
         ${tags.map(tag =>
-          `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}; padding: 6px 12px;">
-            ${tag.name}
-          </span>`
+          `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color};">${tag.name}</span>`
         ).join('')}
+      </div>
+      <div class="tag-management">
+        <div class="form-group">
+          <label for="existingTagSelect">Add Existing Tag</label>
+          <div class="tag-input-row">
+            <select id="existingTagSelect">
+              <option value="">Select tag...</option>
+              ${Object.values(crmState.tags).map(tag =>
+                `<option value="${tag.id}">${escapeHtml(tag.name)}</option>`
+              ).join('')}
+            </select>
+            <button id="addExistingTagBtn" class="btn-sm">＋ Add</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Create & Assign Tag</label>
+          <div class="tag-input-row">
+            <input id="newTagNameInput" type="text" placeholder="Tag name">
+            <input id="newTagColorInput" type="color" value="#06b6d4" title="Pick tag color">
+            <button id="createTagBtn" class="btn-sm">✨ Create</button>
+          </div>
+          <div class="helper-text">Creating a tag automatically assigns it to this contact.</div>
+        </div>
       </div>
     </div>
 
@@ -300,12 +339,12 @@ function renderContactDetailModal(contact) {
       <div id="contactNotesList">
         ${(contact.notes || []).map(note =>
           `<div class="note-item">
-            <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">${formatDateTime(note.createdAt)}</div>
+            <div class="text-muted text-xs mb-1">${formatDateTime(note.createdAt)}</div>
             <div>${escapeHtml(note.content)}</div>
           </div>`
         ).join('')}
       </div>
-      <textarea id="newNoteContent" placeholder="Add a note..." rows="2" style="margin-bottom: 8px;"></textarea>
+      <textarea id="newNoteContent" placeholder="Add a note..." rows="2" class="mb-3"></textarea>
       <button id="addNoteToContact" class="btn-sm">Add Note</button>
     </div>
 
@@ -314,8 +353,54 @@ function renderContactDetailModal(contact) {
     </div>
   `;
 
+  const nameInput = document.getElementById('contactNameInput');
+  const nameHeading = document.getElementById('contactNameHeading');
+  const saveNameBtn = document.getElementById('saveContactNameBtn');
+  const existingTagSelect = document.getElementById('existingTagSelect');
+  const addExistingTagBtn = document.getElementById('addExistingTagBtn');
+  const newTagNameInput = document.getElementById('newTagNameInput');
+  const newTagColorInput = document.getElementById('newTagColorInput');
+  const createTagBtn = document.getElementById('createTagBtn');
+
+  nameInput?.addEventListener('input', () => {
+    if (!nameHeading) return;
+    const preview = nameInput.value.trim();
+    nameHeading.textContent = preview || 'Unnamed Contact';
+  });
+
+  nameInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveNameBtn?.click();
+    }
+  });
+
   document.getElementById('contactStatusSelect')?.addEventListener('change', async (e) => {
     await updateContactStatus(contact.id, e.target.value);
+  });
+
+  saveNameBtn?.addEventListener('click', async () => {
+    await updateContactName(contact.id, nameInput?.value || '');
+  });
+
+  addExistingTagBtn?.addEventListener('click', async () => {
+    const selectedId = parseInt(existingTagSelect?.value || '', 10);
+    if (!selectedId) {
+      alert('Select a tag first');
+      return;
+    }
+    await assignTagToContact(contact.id, { tagId: selectedId });
+  });
+
+  createTagBtn?.addEventListener('click', async () => {
+    const name = newTagNameInput?.value.trim();
+    const color = newTagColorInput?.value || '#06b6d4';
+    if (!name) {
+      alert('Enter a tag name');
+      return;
+    }
+    await assignTagToContact(contact.id, { name, color });
+    if (newTagNameInput) newTagNameInput.value = '';
   });
 
   document.getElementById('addNoteToContact')?.addEventListener('click', async () => {
@@ -361,6 +446,102 @@ async function updateContactStatus(contactId, statusId) {
     }
   } catch (err) {
     alert('Failed to update status');
+  }
+}
+
+/**
+ * Update contact name
+ */
+async function updateContactName(contactId, name) {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    alert('Please enter a contact name');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: crmState.currentSession, name: trimmedName })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update contact name');
+    }
+
+    if (chatState.contacts?.[contactId]) {
+      chatState.contacts[contactId].name = trimmedName;
+    }
+
+    if (chatState.currentContact?.id === contactId) {
+      chatState.currentContact.name = trimmedName;
+      const nameEl = document.getElementById('chatContactName');
+      const avatarEl = document.getElementById('chatContactAvatar');
+      if (nameEl) nameEl.textContent = trimmedName;
+      if (avatarEl) avatarEl.textContent = trimmedName[0] || '?';
+    }
+
+    if (typeof renderChatContactsList === 'function') {
+      renderChatContactsList();
+    }
+
+    alert('Name updated!');
+
+    if (crmState.currentSession) {
+      await loadCRMContacts(crmState.currentSession);
+    }
+
+    await showContactDetailModal(contactId, crmState.currentSession);
+  } catch (err) {
+    alert(err.message || 'Failed to update contact name');
+  }
+}
+
+/**
+ * Assign tag (existing or new) to contact
+ */
+async function assignTagToContact(contactId, { tagId, name, color }) {
+  if (!crmState.currentSession) {
+    alert('Select a session first');
+    return;
+  }
+
+  if (!tagId && !name) {
+    alert('Provide a tag or name');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/contacts/${contactId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: crmState.currentSession,
+        tagId,
+        name,
+        color
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to assign tag');
+    }
+
+    // Refresh tags when creating new ones
+    if (name && !crmState.tags[data.tagId]) {
+      await loadCRMTags(crmState.currentSession);
+    }
+
+    alert('Tag added!');
+
+    await showContactDetailModal(contactId, crmState.currentSession);
+    await loadCRMContacts(crmState.currentSession);
+  } catch (err) {
+    alert(err.message || 'Failed to assign tag');
   }
 }
 

@@ -278,16 +278,23 @@ function initChat() {
     }
   });
 
+  // View Contact Details
+  document.getElementById('viewContactBtn')?.addEventListener('click', () => {
+    if (chatState.currentContact) {
+      showContactDetailModal(chatState.currentContact.id, chatState.currentSession);
+    }
+  });
+
   // Quick action buttons
   document.getElementById('updateStatusBtn')?.addEventListener('click', () => {
     if (chatState.currentContact) {
-      showContactDetailModal(chatState.currentContact.id);
+      showContactDetailModal(chatState.currentContact.id, chatState.currentSession);
     }
   });
 
   document.getElementById('addTagBtn')?.addEventListener('click', () => {
     if (chatState.currentContact) {
-      showContactDetailModal(chatState.currentContact.id);
+      showContactDetailModal(chatState.currentContact.id, chatState.currentSession);
     }
   });
 

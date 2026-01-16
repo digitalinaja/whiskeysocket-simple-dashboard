@@ -335,6 +335,36 @@ router.put('/contacts/:contactId/status', async (req, res) => {
 });
 
 /**
+ * PUT /api/contacts/:contactId
+ * Update editable contact fields (currently name)
+ */
+router.put('/contacts/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { sessionId, name } = req.body;
+
+    if (!sessionId || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'sessionId and a non-empty name are required' });
+    }
+
+    const connection = getPool();
+    const [result] = await connection.query(
+      `UPDATE contacts SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND session_id = ?`,
+      [name.trim(), contactId, sessionId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Contact not found for this session' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating contact:', error);
+    res.status(500).json({ error: 'Failed to update contact' });
+  }
+});
+
+/**
  * GET /api/tags
  * List all tags for session
  */
