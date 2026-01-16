@@ -3267,22 +3267,36 @@
 
     // Handle message deletion
     socket.on('chat.messageDeleted', (data) => {
+      console.log('🗑️ Received message deleted event:', data);
       const { sessionId, messageId, contactId } = data;
 
       // Update messages if in same session
       if (sessionId === chatState.currentSession && chatState.messages[contactId]) {
-        // Find and update the deleted message
-        const messageIndex = chatState.messages[contactId].findIndex(msg => msg.messageId === messageId);
+        // Find and update the deleted message (try both id and messageId fields)
+        const messageIndex = chatState.messages[contactId].findIndex(msg =>
+          (msg.messageId === messageId || msg.id === messageId || msg.messageId === messageId)
+        );
+
+        console.log(`  Looking for message ID: ${messageId}, found index: ${messageIndex}`);
+        console.log(`  Current contact ID: ${chatState.currentContact?.id}, event contact ID: ${contactId}`);
 
         if (messageIndex !== -1) {
+          console.log(`  ✓ Updating message at index ${messageIndex}`);
           chatState.messages[contactId][messageIndex].content = '[This message was deleted]';
           chatState.messages[contactId][messageIndex].isDeleted = true;
 
           // If this is the current chat, render
           if (chatState.currentContact?.id === contactId) {
+            console.log('  ✓ Rendering messages');
             renderMessages();
+          } else {
+            console.log(`  ✗ Not current chat, skipping render`);
           }
+        } else {
+          console.log(`  ✗ Message not found in local state`);
         }
+      } else {
+        console.log(`  ✗ Wrong session or no messages for contact ${contactId}`);
       }
     });
 
