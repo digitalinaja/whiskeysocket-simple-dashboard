@@ -17,7 +17,8 @@ const chatState = {
   currentSession: null,
   currentContact: null,
   contacts: {},
-  messages: {}
+  messages: {},
+  selectedMedia: null
 };
 
 // CRM state

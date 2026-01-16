@@ -1,7 +1,76 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const { getPool, createDefaultLeadStatuses } = require('./database');
 const chatHandlers = require('./chatHandlers');
+
+const MEDIA_ROOT = path.join(__dirname, '..', 'media');
+const OUTGOING_MEDIA_DIR = path.join(MEDIA_ROOT, 'outgoing');
+const MAX_MEDIA_SIZE_MB = 25;
+const MAX_MEDIA_BYTES = MAX_MEDIA_SIZE_MB * 1024 * 1024;
+
+const MIME_EXTENSION_MAP = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm'
+};
+
+function ensureOutgoingDir() {
+  if (!fs.existsSync(OUTGOING_MEDIA_DIR)) {
+    fs.mkdirSync(OUTGOING_MEDIA_DIR, { recursive: true });
+  }
+}
+
+function buildMediaFilename(file) {
+  const timestamp = Date.now();
+  const rand = Math.round(Math.random() * 1e6);
+  const originalExt = path.extname(file.originalname || '').toLowerCase();
+  const mimeExt = MIME_EXTENSION_MAP[file.mimetype] || '';
+  const extension = originalExt || mimeExt || '.bin';
+  return `outgoing-${timestamp}-${rand}${extension}`;
+}
+
+function persistUploadedMedia(file) {
+  ensureOutgoingDir();
+  const filename = buildMediaFilename(file);
+  const absolutePath = path.join(OUTGOING_MEDIA_DIR, filename);
+  fs.writeFileSync(absolutePath, file.buffer);
+  const relativePath = path.relative(MEDIA_ROOT, absolutePath).split(path.sep).join('/');
+  return { absolutePath, relativePath };
+}
+
+function mediaFileFilter(_req, file, cb) {
+  if (file.mimetype?.startsWith('image/') || file.mimetype?.startsWith('video/')) {
+    return cb(null, true);
+  }
+  cb(new Error('Only image and video files are allowed'));
+}
+
+const uploadMedia = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: mediaFileFilter,
+  limits: { fileSize: MAX_MEDIA_BYTES }
+});
+
+const handleMediaUpload = (req, res, next) => {
+  uploadMedia.single('media')(req, res, (err) => {
+    if (!err) {
+      return next();
+    }
+
+    console.error('Media upload error:', err);
+    const message = err.message.includes('File too large')
+      ? `Media file exceeds ${MAX_MEDIA_SIZE_MB}MB limit`
+      : err.message;
+    res.status(400).json({ error: message });
+  });
+};
 
 /**
  * GET /api/contacts
@@ -242,29 +311,82 @@ router.get('/contacts/:contactId/messages', async (req, res) => {
 
 /**
  * POST /api/chat/send
- * Send message from chat UI
+ * Send message (text + optional media) from chat UI
  */
-router.post('/chat/send', async (req, res) => {
-  try {
-    const { sessionId, phone, content, type = 'text' } = req.body;
+router.post('/chat/send', handleMediaUpload, async (req, res) => {
+  let storedMediaPath = null;
+  let storedRelativePath = null;
 
-    if (!sessionId || !phone || !content) {
-      return res.status(400).json({ error: 'sessionId, phone, and content are required' });
+  const cleanupOnError = () => {
+    if (storedMediaPath) {
+      fs.unlink(storedMediaPath, () => {});
+    }
+  };
+
+  try {
+    const { sessionId, phone } = req.body;
+    let { content = '' } = req.body;
+    let type = req.body.type || 'text';
+    const hasMedia = Boolean(req.file);
+
+    content = typeof content === 'string' ? content.trim() : '';
+
+    if (!sessionId || !phone) {
+      return res.status(400).json({ error: 'sessionId and phone are required' });
     }
 
-    // Get socket from sessions map (will be available after integration with index.js)
+    if (!hasMedia && !content) {
+      return res.status(400).json({ error: 'Message text or media is required' });
+    }
+
+    if (hasMedia) {
+      type = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+
+      if (!req.file.buffer || !req.file.buffer.length) {
+        return res.status(400).json({ error: 'Uploaded media is empty' });
+      }
+
+      try {
+        const saved = persistUploadedMedia(req.file);
+        storedMediaPath = saved.absolutePath;
+        storedRelativePath = saved.relativePath;
+      } catch (err) {
+        console.error('Failed to persist uploaded media:', err);
+        return res.status(500).json({ error: 'Failed to store uploaded media' });
+      }
+    }
+
     const sessions = req.app.get('sessions');
     const session = sessions.get(sessionId);
 
     if (!session || !session.sock) {
+      cleanupOnError();
       return res.status(404).json({ error: 'Session not found or not connected' });
     }
 
-    const result = await chatHandlers.sendMessage(sessionId, session.sock, phone, content, type);
+    const mediaPayload = hasMedia
+      ? {
+          mediaPath: storedMediaPath,
+          relativePath: storedRelativePath,
+          buffer: req.file.buffer,
+          mimetype: req.file.mimetype,
+          originalName: req.file.originalname
+        }
+      : null;
+
+    const result = await chatHandlers.sendMessage(
+      sessionId,
+      session.sock,
+      phone,
+      content,
+      type,
+      mediaPayload
+    );
 
     res.json({ success: true, message: result });
   } catch (error) {
     console.error('Error sending message:', error);
+    cleanupOnError();
     res.status(500).json({ error: 'Failed to send message' });
   }
 });

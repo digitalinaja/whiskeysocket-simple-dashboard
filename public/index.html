@@ -556,9 +556,17 @@
                 <button id="addNoteBtn" class="btn-sm">📝 Note</button>
               </div>
               <div class="message-input-wrapper">
+                <button type="button" id="attachMediaBtn" class="btn-icon attach-media-btn" title="Attach image or video">📎</button>
                 <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
-                <button id="sendMessageBtn" class="btn-send">➤</button>
+                <button type="button" id="sendMessageBtn" class="btn-send">➤</button>
               </div>
+              <div class="selected-media-preview" id="selectedMediaPreview" style="display: none;">
+                <div class="selected-media-chip">
+                  <span id="selectedMediaLabel">media</span>
+                  <button type="button" id="clearMediaBtn" class="btn-icon" title="Remove media">✕</button>
+                </div>
+              </div>
+              <input type="file" id="mediaInput" accept="image/*,video/*" hidden>
             </div>
           </div>
         </div>

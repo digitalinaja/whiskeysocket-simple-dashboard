@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 
+const MEDIA_BASE_PATH = path.join(__dirname, '../media');
+
 /**
  * Download and save media file locally
  */
@@ -510,37 +512,90 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
 }
 
 /**
- * Send message via WhatsApp
+ * Send message via WhatsApp (supports text, image, video)
  */
-async function sendMessage(sessionId, sock, phone, content, messageType = 'text') {
+async function sendMessage(sessionId, sock, phone, content = '', messageType = 'text', mediaOptions = null) {
   const connection = getPool();
 
   try {
-    // Normalize phone number for consistency
     const normalizedPhone = normalizePhoneNumber(phone);
     if (!normalizedPhone) {
       throw new Error(`Invalid phone number: ${phone}`);
     }
 
     const jid = `${normalizedPhone}@s.whatsapp.net`;
-
-    // Get or create contact (will normalize again internally, which is fine)
     const contact = await getOrCreateContact(sessionId, normalizedPhone);
 
-    // Send message via Baileys
-    const sentMessage = await sock.sendMessage(jid, { text: content });
+    const supportsMedia = mediaOptions && ['image', 'video'].includes(messageType);
+    const caption = typeof content === 'string' ? content : '';
+    const displayContent = caption || (messageType === 'image' ? '[Image]' : messageType === 'video' ? '[Video]' : '');
 
-    // Save to database
+    let payload;
+    if (supportsMedia) {
+      const mediaSource = mediaOptions.buffer
+        || (mediaOptions.mediaPath ? fs.createReadStream(mediaOptions.mediaPath) : null);
+
+      if (!mediaSource) {
+        throw new Error('Media payload missing buffer or file path');
+      }
+
+      if (messageType === 'image') {
+        payload = {
+          image: mediaSource,
+          caption: caption || undefined,
+          mimetype: mediaOptions.mimetype
+        };
+      } else {
+        payload = {
+          video: mediaSource,
+          caption: caption || undefined,
+          mimetype: mediaOptions.mimetype
+        };
+      }
+    } else {
+      if (!caption) {
+        throw new Error('Message content is required for text messages');
+      }
+      payload = { text: caption };
+      messageType = 'text';
+    }
+
+    const sentMessage = await sock.sendMessage(jid, payload);
+
     const timestamp = new Date();
     const messageId = sentMessage.key.id;
+    const mediaUrl = supportsMedia
+      ? (mediaOptions.relativePath
+          || (mediaOptions.mediaPath
+            ? path.relative(MEDIA_BASE_PATH, mediaOptions.mediaPath).split(path.sep).join('/')
+            : null))
+      : null;
+
+    const rawPayload = supportsMedia
+      ? {
+          type: messageType,
+          mimetype: mediaOptions.mimetype,
+          originalName: mediaOptions.originalName
+        }
+      : null;
 
     await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, timestamp, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, 'outgoing', messageType, content, timestamp, 'sent']
+      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        sessionId,
+        contact.id,
+        messageId,
+        'outgoing',
+        messageType,
+        displayContent,
+        mediaUrl,
+        rawPayload ? JSON.stringify(rawPayload) : null,
+        timestamp,
+        'sent'
+      ]
     );
 
-    // Update last_interaction_at for contact
     await connection.query(
       `UPDATE contacts SET last_interaction_at = ? WHERE id = ?`,
       [timestamp, contact.id]
@@ -550,7 +605,9 @@ async function sendMessage(sessionId, sock, phone, content, messageType = 'text'
       id: messageId,
       contactId: contact.id,
       direction: 'outgoing',
-      content,
+      type: messageType,
+      content: displayContent,
+      mediaUrl,
       timestamp: timestamp.toISOString(),
       status: 'sent'
     };

@@ -99,6 +99,7 @@ async function openChatContact(contactId) {
   }, 100);
   
   // Focus on message input textarea
+  clearSelectedMedia();
   document.getElementById('messageInput').focus();
 }
 
@@ -186,33 +187,132 @@ function renderMessages() {
   }).join('');
 }
 
+const MAX_MEDIA_UPLOAD_BYTES = 25 * 1024 * 1024; // Match server-side limit
+
+function formatMediaSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function updateSelectedMediaPreview() {
+  const preview = document.getElementById('selectedMediaPreview');
+  const labelEl = document.getElementById('selectedMediaLabel');
+  const clearBtn = document.getElementById('clearMediaBtn');
+
+  if (!preview || !labelEl) return;
+
+  if (chatState.selectedMedia) {
+    const file = chatState.selectedMedia;
+    const icon = file.type.startsWith('video/') ? '🎞️' : '🖼️';
+    preview.style.display = 'block';
+    labelEl.textContent = `${icon} ${file.name} · ${formatMediaSize(file.size)}`;
+    clearBtn?.removeAttribute('disabled');
+  } else {
+    preview.style.display = 'none';
+    labelEl.textContent = '';
+    clearBtn?.setAttribute('disabled', 'disabled');
+  }
+}
+
+function clearSelectedMedia() {
+  chatState.selectedMedia = null;
+  const mediaInput = document.getElementById('mediaInput');
+  if (mediaInput) {
+    mediaInput.value = '';
+  }
+  updateSelectedMediaPreview();
+}
+
+function handleMediaSelection(file) {
+  if (!file) {
+    clearSelectedMedia();
+    return;
+  }
+
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    alert('Only image or video files are supported');
+    clearSelectedMedia();
+    return;
+  }
+
+  if (file.size > MAX_MEDIA_UPLOAD_BYTES) {
+    alert('Media file is too large (max 25 MB)');
+    clearSelectedMedia();
+    return;
+  }
+
+  chatState.selectedMedia = file;
+  updateSelectedMediaPreview();
+}
+
 /**
  * Send message
  */
 async function sendMessage() {
   const input = document.getElementById('messageInput');
   const content = input.value.trim();
+  const mediaFile = chatState.selectedMedia;
+  const hasMedia = Boolean(mediaFile);
 
-  if (!content || !chatState.currentContact || !chatState.currentSession) {
+  if (!chatState.currentContact || !chatState.currentSession) {
     alert('Please select a session and contact first');
     return;
   }
 
+  if (!content && !hasMedia) {
+    alert('Type a message or attach media first');
+    return;
+  }
+
+  const sendBtn = document.getElementById('sendMessageBtn');
+  if (sendBtn) {
+    sendBtn.disabled = true;
+  }
+
   try {
-    await postJson('/api/chat/send', {
-      sessionId: chatState.currentSession,
-      phone: chatState.currentContact.phone,
-      content,
-      type: 'text'
-    });
+    let responseData;
+
+    if (hasMedia) {
+      const derivedType = mediaFile.type.startsWith('video/') ? 'video' : 'image';
+      const formData = new FormData();
+      formData.append('sessionId', chatState.currentSession);
+      formData.append('phone', chatState.currentContact.phone);
+      formData.append('type', derivedType);
+      if (content) {
+        formData.append('content', content);
+      }
+      formData.append('media', mediaFile);
+
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        body: formData
+      });
+      responseData = await res.json();
+      if (!res.ok) {
+        throw new Error(responseData.error || 'Failed to send media');
+      }
+    } else {
+      responseData = await postJson('/api/chat/send', {
+        sessionId: chatState.currentSession,
+        phone: chatState.currentContact.phone,
+        content,
+        type: 'text'
+      });
+    }
 
     input.value = '';
     input.style.height = 'auto';
+    if (hasMedia) {
+      clearSelectedMedia();
+    }
 
-    const newMessage = {
+    const deliveredMessage = responseData?.message || {
       id: Date.now(),
       direction: 'outgoing',
+      type: hasMedia ? (mediaFile.type.startsWith('video/') ? 'video' : 'image') : 'text',
       content,
+      mediaUrl: null,
       timestamp: new Date().toISOString(),
       status: 'sent'
     };
@@ -220,13 +320,17 @@ async function sendMessage() {
     if (!chatState.messages[chatState.currentContact.id]) {
       chatState.messages[chatState.currentContact.id] = [];
     }
-    chatState.messages[chatState.currentContact.id].push(newMessage);
+    chatState.messages[chatState.currentContact.id].push(deliveredMessage);
 
     renderMessages();
     scrollToBottom(document.getElementById('messagesContainer'));
   } catch (err) {
     console.error('Failed to send message:', err);
     alert('Failed to send message: ' + err.message);
+  } finally {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+    }
   }
 }
 
@@ -318,4 +422,23 @@ function initChat() {
       showContactDetailModal(chatState.currentContact.id);
     }
   });
+
+  const attachBtn = document.getElementById('attachMediaBtn');
+  const mediaInput = document.getElementById('mediaInput');
+  const clearMediaBtn = document.getElementById('clearMediaBtn');
+
+  attachBtn?.addEventListener('click', () => {
+    mediaInput?.click();
+  });
+
+  mediaInput?.addEventListener('change', (e) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    handleMediaSelection(file);
+  });
+
+  clearMediaBtn?.addEventListener('click', () => {
+    clearSelectedMedia();
+  });
+
+  clearSelectedMedia();
 }
