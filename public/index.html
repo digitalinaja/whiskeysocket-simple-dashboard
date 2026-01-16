@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhiskeySocket Dashboard</title>
+  <title>Alhikmah CRM Dashboard - Webaloka by Baileys 7.x.x</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,6 +25,21 @@
       --sidebar-width: 260px;
     }
 
+    /* Light Mode */
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --panel-light: rgba(0,0,0,0.02);
+      --accent: #06b6d4;
+      --accent-hover: #0891b2;
+      --text: #1e293b;
+      --muted: #64748b;
+      --danger: #f43f5e;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --border: rgba(0,0,0,0.1);
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -33,10 +48,124 @@
 
     body {
       font-family: 'Space Grotesk', system-ui, sans-serif;
-      background: radial-gradient(circle at 10% 20%, #0b1225 0, #0f172a 40%, #0b1225 75%);
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    /* Theme Toggle Button */
+    .theme-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 999;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .theme-toggle:hover {
+      background: var(--panel-light);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .theme-toggle .theme-text {
+      display: none;
+    }
+
+    @media (min-width: 768px) {
+      .theme-toggle .theme-text {
+        display: inline;
+      }
+    }
+
+    /* Hide theme toggle icons based on theme */
+    [data-theme="dark"] .theme-toggle .sun-icon {
+      display: none;
+    }
+
+    [data-theme="light"] .theme-toggle .moon-icon {
+      display: none;
+    }
+
+    /* Sidebar Collapse Button */
+    .sidebar-collapse {
+      position: absolute;
+      top: 16px;
+      right: -40px;
+      width: 32px;
+      height: 32px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: var(--text);
+      z-index: 101;
+    }
+
+    .sidebar-collapse:hover {
+      background: var(--panel-light);
+      transform: translateX(2px);
+    }
+
+    .sidebar-collapse svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.3s ease;
+    }
+
+    /* Sidebar collapsed state */
+    .sidebar.collapsed {
+      width: 0;
+      overflow: hidden;
+      transform: translateX(-100%);
+    }
+
+    /* Main content adjustment for sidebar */
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      transition: margin-left 0.3s ease;
+    }
+
+    .main-content.expanded {
+      margin-left: 0;
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        margin-left: 0;
+      }
+
+      .sidebar {
+        transform: translateX(-100%);
+      }
+
+      .sidebar.active {
+        transform: translateX(0);
+      }
     }
 
     /* Sidebar Styles */
@@ -1292,12 +1421,50 @@
     ☰
   </button>
 
+  <!-- Theme Toggle -->
+  <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+    <span class="moon-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </span>
+    <span class="sun-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </span>
+    <span class="theme-text">Dark Mode</span>
+  </button>
+
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
+    <!-- Sidebar Collapse Button -->
+    <button class="sidebar-collapse" id="sidebarCollapse" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
     <div class="sidebar-header">
       <h1>
         <div class="logo-icon">W</div>
-        WhiskeySocket
+        Alhikmah CRM
       </h1>
     </div>
 
@@ -4055,6 +4222,76 @@
           loadCRMData(crmState.currentSession);
         }
       };
+    }
+
+    // Theme Toggle Functionality
+    const themeToggle = document.getElementById('themeToggle');
+    const themeText = themeToggle?.querySelector('.theme-text');
+
+    // Get saved theme or default to dark
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeText(savedTheme);
+
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        // Apply new theme
+        document.documentElement.setAttribute('data-theme', newTheme);
+
+        // Save to localStorage
+        localStorage.setItem('theme', newTheme);
+
+        // Update button text
+        updateThemeText(newTheme);
+      });
+    }
+
+    function updateThemeText(theme) {
+      if (themeText) {
+        themeText.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
+      }
+    }
+
+    // Sidebar Collapse Functionality
+    const sidebarCollapse = document.getElementById('sidebarCollapse');
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.querySelector('.main-content');
+
+    // Get saved sidebar state or default to expanded
+    const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (sidebarCollapsed) {
+      sidebar?.classList.add('collapsed');
+      mainContent?.classList.add('expanded');
+      updateCollapseIcon(true);
+    }
+
+    if (sidebarCollapse) {
+      sidebarCollapse.addEventListener('click', () => {
+        const isCollapsed = sidebar?.classList.toggle('collapsed');
+        mainContent?.classList.toggle('expanded', isCollapsed);
+
+        // Save state to localStorage
+        localStorage.setItem('sidebarCollapsed', isCollapsed);
+
+        // Update icon
+        updateCollapseIcon(isCollapsed);
+      });
+    }
+
+    function updateCollapseIcon(collapsed) {
+      if (sidebarCollapse) {
+        const svg = sidebarCollapse.querySelector('svg');
+        if (collapsed) {
+          // Show right arrow (collapsed state)
+          svg.innerHTML = '<polyline points="9 18 15 12 9 6"></polyline>';
+        } else {
+          // Show left arrow (expanded state)
+          svg.innerHTML = '<polyline points="15 18 9 12 15 6"></polyline>';
+        }
+      }
     }
   </script>
 </body>
