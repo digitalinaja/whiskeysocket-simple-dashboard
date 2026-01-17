@@ -267,10 +267,8 @@ async function loadExistingSessions() {
   }
   const entries = fs.readdirSync(AUTH_ROOT, { withFileTypes: true });
   const sessionIds = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  // Ensure default always exists
-  if (!sessionIds.includes(DEFAULT_SESSION_ID)) {
-    sessionIds.push(DEFAULT_SESSION_ID);
-  }
+
+  // Only load sessions that already exist (no auto-creation)
   for (const id of sessionIds) {
     try {
       await createSession(id);
