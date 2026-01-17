@@ -1,15 +1,19 @@
-const express = require("express");
-const http = require("http");
-const path = require("path");
-const fs = require("fs");
-const { randomUUID } = require("crypto");
-const session = require('express-session');
-const startWA = require("./baileys");
-const initSocket = require("./socket");
-const { initDatabase, testConnection, createDefaultLeadStatuses } = require("./database");
-const chatHandlers = require("./chatHandlers");
-const googleContacts = require("./googleContacts");
-const crmRoutes = require("./crmRoutes");
+import express from "express";
+import http from "http";
+import path from "path";
+import fs from "fs";
+import { randomUUID } from "crypto";
+import session from 'express-session';
+import { fileURLToPath } from "url";
+import startWA from "./baileys.js";
+import initSocket from "./socket.js";
+import { initDatabase, testConnection, createDefaultLeadStatuses } from "./database.js";
+import * as chatHandlers from "./chatHandlers.js";
+import * as googleContacts from "./googleContacts.js";
+import crmRoutes from "./crmRoutes.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);

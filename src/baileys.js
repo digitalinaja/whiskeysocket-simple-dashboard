@@ -1,4 +1,4 @@
-const qrcode = require("qrcode-terminal");
+import qrcode from "qrcode-terminal";
 
 let baileysPromise;
 function getBaileys() {
@@ -114,4 +114,4 @@ async function startWA({
   return startSock();
 }
 
-module.exports = startWA;
+export default startWA;

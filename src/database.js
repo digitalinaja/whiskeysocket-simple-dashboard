@@ -1,5 +1,5 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+import mysql from 'mysql2/promise';
+import 'dotenv/config.js';
 
 // Connection pool configuration for TiDB Cloud
 const poolConfig = {
@@ -243,7 +243,7 @@ async function createDefaultLeadStatuses(sessionId) {
   }
 }
 
-module.exports = {
+export {
   getPool,
   initDatabase,
   testConnection,

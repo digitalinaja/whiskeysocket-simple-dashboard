@@ -1,10 +1,14 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
-const { getPool, createDefaultLeadStatuses } = require('./database');
-const chatHandlers = require('./chatHandlers');
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
+import { getPool, createDefaultLeadStatuses } from './database.js';
+import * as chatHandlers from './chatHandlers.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MEDIA_ROOT = path.join(__dirname, '..', 'media');
 const OUTGOING_MEDIA_DIR = path.join(MEDIA_ROOT, 'outgoing');
@@ -803,7 +807,7 @@ router.get('/messages/:messageId/media', async (req, res) => {
     }
 
     // Use Baileys downloadContentFromMessage function
-    const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+    const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
 
     // Determine the message type for downloadContentFromMessage
     // This must match the key in rawMessage.message (imageMessage, videoMessage, etc.)
@@ -868,4 +872,4 @@ function streamToBuffer(stream) {
   });
 }
 
-module.exports = router;
+export default router;

@@ -1,6 +1,6 @@
-const { google } = require('googleapis');
-const { getPool } = require('./database');
-const { normalizePhoneNumber } = require('./chatHandlers');
+import { google } from 'googleapis';
+import { getPool } from './database.js';
+import { normalizePhoneNumber } from './chatHandlers.js';
 
 // OAuth2 client configuration
 function getOAuth2Client() {
@@ -265,7 +265,7 @@ async function disconnectGoogle(sessionId) {
   }
 }
 
-module.exports = {
+export {
   getAuthUrl,
   handleOAuthCallback,
   getGoogleClient,

@@ -1,7 +1,11 @@
-const { getPool, createDefaultLeadStatuses } = require('./database');
-const fs = require('fs');
-const path = require('path');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+import { getPool, createDefaultLeadStatuses } from './database.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MEDIA_BASE_PATH = path.join(__dirname, '../media');
 
@@ -1038,7 +1042,7 @@ function getMessageType(message) {
   return 'text';
 }
 
-module.exports = {
+export {
   handleIncomingMessage,
   handleHistorySync,
   getOrCreateContact,
