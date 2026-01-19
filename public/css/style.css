@@ -165,7 +165,8 @@
     @apply block;
   }
   .view-flex.active {
-    @apply flex;
+    @apply flex flex-col;
+    height: 100%;
   }
   .chat-container {
     @apply grid gap-4 lg:grid-cols-3;
@@ -359,6 +360,25 @@
   }
   .modal-close {
     @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200;
+  }
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4;
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+  .btn-close-modal {
+    @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 transition;
   }
   .job-list {
     @apply space-y-3;
@@ -643,3 +663,148 @@
     @apply bg-white border-slate-200;
   }
 }
+  /* Groups UI Styles - Uses same layout as Chat */
+  .category-tabs {
+    @apply flex flex-wrap gap-1 p-1.5 mb-1 rounded-lg bg-slate-800/30;
+  }
+  .category-tab {
+    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition;
+    @apply text-slate-400 hover:bg-slate-800 hover:text-slate-200;
+    @apply border border-transparent;
+  }
+  .category-tab.active {
+    @apply bg-cyan-500/20 text-cyan-200 border-cyan-500/30;
+  }
+  .tab-icon {
+    @apply text-sm;
+  }
+  .tab-label {
+    @apply text-xs;
+  }
+  .tab-count {
+    @apply text-[10px] px-1.5 py-0.5 rounded-full bg-black/20;
+  }
+  .category-tab.active .tab-count {
+    @apply bg-cyan-500/30 text-cyan-100;
+  }
+  .category-badge-btn {
+    @apply ml-2 px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer transition;
+    @apply border border-transparent bg-slate-800 text-slate-300;
+  }
+  .category-badge-btn:hover {
+    @apply border-cyan-500/50 bg-cyan-500/20 text-cyan-200;
+  }
+  .groups-list {
+    @apply mt-4 flex-1 space-y-2 overflow-y-auto;
+  }
+  .loading-groups {
+    @apply text-center text-slate-400 py-8 text-sm;
+  }
+  .group-card {
+    @apply flex items-center gap-3 p-3 rounded-lg border border-transparent;
+    @apply hover:bg-slate-800 hover:border-slate-700 cursor-pointer transition;
+  }
+  .group-card.active {
+    @apply bg-slate-800 border-slate-700;
+  }
+  .group-avatar-wrapper {
+    @apply relative flex-shrink-0;
+  }
+  .group-avatar {
+    @apply flex items-center justify-center w-12 h-12 rounded-full;
+    @apply bg-gradient-to-br from-purple-500 to-indigo-600 text-xl;
+  }
+  .unread-badge {
+    @apply absolute bottom-0 right-0 bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold;
+  }
+  .mute-indicator {
+    @apply absolute bottom-0 right-0 text-xs bg-slate-800 rounded-full p-0.5;
+  }
+  .group-info {
+    @apply flex-1 min-w-0 overflow-hidden;
+  }
+  .group-header-row {
+    @apply flex items-center justify-between gap-2 mb-1;
+  }
+  .group-name {
+    @apply text-sm font-semibold text-slate-100 truncate;
+  }
+  .group-category-badge {
+    @apply text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 flex-shrink-0;
+  }
+  .group-meta {
+    @apply flex items-center gap-2 text-xs text-slate-500 mb-1;
+  }
+  .last-message {
+    @apply flex items-start gap-1.5 text-xs text-slate-400 truncate;
+  }
+  .sender-name {
+    @apply font-semibold text-slate-300 flex-shrink-0;
+  }
+  .message-preview {
+    @apply truncate;
+  }
+  .group-actions {
+    @apply flex flex-col gap-1 flex-shrink-0;
+  }
+  .group-chat-window {
+    @apply lg:col-span-2 flex flex-col min-h-0 h-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60;
+  }
+  .quick-stats {
+    @apply flex gap-8 mt-6;
+  }
+  .stat-item {
+    @apply text-center;
+  }
+  .group-header .group-info {
+    @apply flex items-center gap-3;
+  }
+  .group-header .group-avatar {
+    @apply w-11 h-11 text-2xl;
+  }
+  .group-details {
+    @apply flex flex-col;
+  }
+  .group-header .group-name {
+    @apply text-base font-semibold;
+  }
+  .group-meta {
+    @apply flex items-center gap-2 text-xs text-slate-400;
+  }
+  .category-badge {
+    @apply px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 text-[10px];
+  }
+  .group-message .message-sender {
+    @apply flex items-center gap-2 mb-1.5;
+  }
+  .group-message .sender-name {
+    @apply text-xs font-semibold;
+  }
+  .group-message .sender-avatar {
+    @apply w-6 h-6 rounded-full bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center justify-center;
+  }
+  .group-message.incoming .sender-name {
+    @apply text-indigo-400;
+  }
+  .group-message.outgoing {
+    @apply justify-end;
+  }
+  .group-message.outgoing .message-sender {
+    @apply flex-row-reverse;
+  }
+  .group-message.outgoing .sender-name {
+    @apply text-purple-400;
+  }
+  .group-message {
+    @apply max-w-[75%] mb-4;
+  }
+
+  /* Category Tabs in Chat Sidebar */
+  .chat-header .category-tabs {
+    @apply mt-3 mb-2 pb-2 border-b border-slate-800;
+  }
+
+  /* Group message preview with sender name */
+  .contact-item-preview .sender-name {
+    @apply font-medium text-slate-300;
+  }

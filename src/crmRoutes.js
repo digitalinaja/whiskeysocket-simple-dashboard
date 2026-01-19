@@ -6,6 +6,7 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { getPool, createDefaultLeadStatuses } from './database.js';
 import * as chatHandlers from './chatHandlers.js';
+import * as groupHandlers from './groupHandlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -806,6 +807,16 @@ router.get('/messages/:messageId/media', async (req, res) => {
       return res.status(500).json({ error: 'Failed to parse raw message data' });
     }
 
+    // Debug: Check what's in raw_message
+    console.log('📋 Raw message structure:');
+    console.log('  - Has message:', !!rawMessage.message);
+    console.log('  - Has key:', !!rawMessage.key);
+    if (rawMessage.message?.imageMessage) {
+      console.log('  - imageMessage keys:', Object.keys(rawMessage.message.imageMessage));
+      console.log('  - Has mediaKey:', !!rawMessage.message.imageMessage.mediaKey);
+      console.log('  - Has url:', !!rawMessage.message.imageMessage.url);
+    }
+
     // Use Baileys downloadContentFromMessage function
     const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
 
@@ -828,8 +839,21 @@ router.get('/messages/:messageId/media', async (req, res) => {
     console.log(`Has message.message:`, !!rawMessage.message);
     console.log(`Message keys:`, Object.keys(rawMessage.message || {}));
 
-    // Download media as stream (rawMessage is already IWebMessageInfo format)
-    const stream = await downloadContentFromMessage(rawMessage, mediaType);
+    // Extract the specific media message object (e.g., imageMessage, videoMessage)
+    // This is CRITICAL: downloadContentFromMessage needs the media object, NOT the full message
+    const mediaMessageKey = `${mediaType}Message`; // e.g., 'imageMessage'
+    const mediaContent = rawMessage.message[mediaMessageKey];
+
+    if (!mediaContent) {
+      return res.status(400).json({ error: `Media content not found: ${mediaMessageKey}` });
+    }
+
+    console.log(`Media keys:`, Object.keys(mediaContent));
+    console.log(`Has mediaKey:`, !!mediaContent.mediaKey);
+    console.log(`Has url:`, !!mediaContent.url);
+
+    // Download media as stream - pass mediaContent (the specific media object), NOT rawMessage
+    const stream = await downloadContentFromMessage(mediaContent, mediaType);
 
     if (!stream) {
       return res.status(500).json({ error: 'Failed to download media' });
@@ -871,5 +895,192 @@ function streamToBuffer(stream) {
     stream.on('error', reject);
   });
 }
+
+/**
+ * GET /api/groups
+ * List groups with category filter
+ */
+router.get('/groups', async (req, res) => {
+  try {
+    const { sessionId, category = 'all' } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const groups = await groupHandlers.getGroupsByCategory(sessionId, category);
+
+    res.json({ groups });
+  } catch (error) {
+    console.error('Error fetching groups:', error);
+    res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+/**
+ * GET /api/groups/:id
+ * Get group details by database ID
+ */
+router.get('/groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const group = await groupHandlers.getGroupById(id);
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    res.json({ group });
+  } catch (error) {
+    console.error('Error fetching group details:', error);
+    res.status(500).json({ error: 'Failed to fetch group details' });
+  }
+});
+
+/**
+ * GET /api/groups/:id/messages
+ * Get group messages
+ */
+router.get('/groups/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sessionId, limit = 50 } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const messages = await groupHandlers.getGroupMessages(sessionId, id, parseInt(limit));
+
+    res.json({ messages });
+  } catch (error) {
+    console.error('Error fetching group messages:', error);
+    res.status(500).json({ error: 'Failed to fetch group messages' });
+  }
+});
+
+/**
+ * POST /api/groups/:id/messages
+ * Send message to group
+ */
+router.post('/groups/:id/messages', handleMediaUpload, async (req, res) => {
+  let storedMediaPath = null;
+  let storedRelativePath = null;
+
+  const cleanupOnError = () => {
+    if (storedMediaPath) {
+      fs.unlink(storedMediaPath, () => {});
+    }
+  };
+
+  try {
+    const { id } = req.params;
+    const { sessionId, content = '' } = req.body;
+    let type = req.body.type || 'text';
+    const hasMedia = Boolean(req.file);
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    if (!hasMedia && !content.trim()) {
+      return res.status(400).json({ error: 'Message text or media is required' });
+    }
+
+    // Get group details by database ID
+    const group = await groupHandlers.getGroupById(id);
+
+    if (!group) {
+      cleanupOnError();
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Handle media upload if present
+    if (hasMedia) {
+      type = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+
+      if (!req.file.buffer || !req.file.buffer.length) {
+        return res.status(400).json({ error: 'Uploaded media is empty' });
+      }
+
+      try {
+        const saved = persistUploadedMedia(req.file);
+        storedMediaPath = saved.absolutePath;
+        storedRelativePath = saved.relativePath;
+      } catch (err) {
+        console.error('Failed to persist uploaded media:', err);
+        return res.status(500).json({ error: 'Failed to store uploaded media' });
+      }
+    }
+
+    // Get socket from sessions map
+    const sessions = req.app.get('sessions');
+    const session = sessions.get(sessionId);
+
+    if (!session || !session.sock) {
+      cleanupOnError();
+      return res.status(404).json({ error: 'Session not found or not connected' });
+    }
+
+    const mediaPayload = hasMedia
+      ? {
+          mediaPath: storedMediaPath,
+          relativePath: storedRelativePath,
+          buffer: req.file.buffer,
+          mimetype: req.file.mimetype,
+          originalName: req.file.originalname
+        }
+      : null;
+
+    // Send message to group using the sock
+    const result = await chatHandlers.sendMessage(
+      sessionId,
+      session.sock,
+      group.groupId, // Full JID with @g.us suffix
+      content,
+      type,
+      mediaPayload
+    );
+
+    res.json({ success: true, message: result });
+  } catch (error) {
+    console.error('Error sending group message:', error);
+    cleanupOnError();
+    res.status(500).json({ error: 'Failed to send group message' });
+  }
+});
+
+/**
+ * PATCH /api/groups/:id/category
+ * Update group category
+ */
+router.patch('/groups/:id/category', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sessionId, category } = req.body;
+
+    if (!sessionId || !category) {
+      return res.status(400).json({ error: 'sessionId and category are required' });
+    }
+
+    if (!['business', 'internal', 'personal'].includes(category)) {
+      return res.status(400).json({ error: 'Invalid category. Must be business, internal, or personal' });
+    }
+
+    // Get group to get groupId with @g.us suffix
+    const group = await groupHandlers.getGroupById(id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    await groupHandlers.updateGroupCategory(sessionId, group.groupId, category);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating group category:', error);
+    res.status(500).json({ error: 'Failed to update group category' });
+  }
+});
 
 export default router;

@@ -12,7 +12,7 @@ function navigateTo(viewId, sessionId = null) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
   // Update nav items (only for main nav items)
-  if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'contacts'].includes(viewId)) {
+  if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'groups', 'contacts'].includes(viewId)) {
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.remove('active');
       if (item.dataset.view === viewId) {
@@ -70,6 +70,11 @@ function navigateTo(viewId, sessionId = null) {
     }
     if (crmState.currentSession) {
       loadCRMData(crmState.currentSession);
+    }
+  } else if (viewId === 'groups') {
+    // Call Groups.onNavigate to refresh sessions and load groups
+    if (Groups.onNavigate) {
+      Groups.onNavigate();
     }
   }
 }

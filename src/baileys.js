@@ -74,7 +74,7 @@ async function startWA({
           try {
             // Process both "notify" (real-time) and "append" (history sync)
             // The callback will handle the logic differently based on context
-            await onMessage(sessionId, msg, type);
+            await onMessage(sessionId, msg, type, sock);
           } catch (error) {
             console.error("Error handling message:", error);
           }
@@ -88,7 +88,7 @@ async function startWA({
 
       if (onHistorySync) {
         try {
-          await onHistorySync(sessionId, { chats, contacts, messages, syncType });
+          await onHistorySync(sessionId, { chats, contacts, messages, syncType }, sock);
         } catch (error) {
           console.error("Error handling history sync:", error);
         }

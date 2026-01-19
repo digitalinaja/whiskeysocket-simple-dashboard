@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { downloadContentFromMessage } from '@whiskeysockets/baileys';
+import * as groupHandlers from './groupHandlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,17 +134,21 @@ function validateAndNormalizePhone(phone) {
  * Handle incoming WhatsApp message
  * Saves contact and message to database, emits Socket.io event
  */
-async function handleIncomingMessage(sessionId, message, io, messageType = 'notify') {
+async function handleIncomingMessage(sessionId, message, sock, io, messageType = 'notify') {
   const connection = getPool();
 
   try {
-    // Skip if message is from a group (contains @g.us in JID)
-    if (message.key.remoteJid?.includes('@g.us')) {
+    // Skip status broadcasts
+    if (message.key.remoteJid?.includes('@broadcast')) {
       return;
     }
 
-    // Skip status broadcasts
-    if (message.key.remoteJid?.includes('@broadcast')) {
+    // Check if this is a group message
+    const isGroupMessage = message.key.remoteJid?.includes('@g.us');
+
+    if (isGroupMessage) {
+      // Handle group message - delegate to group handler
+      await handleGroupMessage(sessionId, message, sock, io, messageType);
       return;
     }
 
@@ -522,13 +527,25 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
   const connection = getPool();
 
   try {
-    const normalizedPhone = normalizePhoneNumber(phone);
-    if (!normalizedPhone) {
-      throw new Error(`Invalid phone number: ${phone}`);
-    }
+    // Check if this is a group message (contains @g.us)
+    const isGroupMessage = phone.includes('@g.us');
+    let jid;
+    let contact = null;
 
-    const jid = `${normalizedPhone}@s.whatsapp.net`;
-    const contact = await getOrCreateContact(sessionId, normalizedPhone);
+    if (isGroupMessage) {
+      // For group messages, use the JID directly
+      jid = phone;
+      console.log(`📤 Sending group message to: ${jid}`);
+    } else {
+      // For private messages, normalize phone number
+      const normalizedPhone = normalizePhoneNumber(phone);
+      if (!normalizedPhone) {
+        throw new Error(`Invalid phone number: ${phone}`);
+      }
+
+      jid = `${normalizedPhone}@s.whatsapp.net`;
+      contact = await getOrCreateContact(sessionId, normalizedPhone);
+    }
 
     const supportsMedia = mediaOptions && ['image', 'video'].includes(messageType);
     const caption = typeof content === 'string' ? content : '';
@@ -575,39 +592,94 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
             : null))
       : null;
 
-    const rawPayload = supportsMedia
-      ? {
-          type: messageType,
-          mimetype: mediaOptions.mimetype,
-          originalName: mediaOptions.originalName
-        }
-      : null;
+    // Store full sentMessage object for media download (includes mediaKey, etc.)
+    const rawPayload = sentMessage;
 
-    await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        sessionId,
-        contact.id,
-        messageId,
-        'outgoing',
-        messageType,
-        displayContent,
-        mediaUrl,
-        rawPayload ? JSON.stringify(rawPayload) : null,
-        timestamp,
-        'sent'
-      ]
-    );
+    // For group messages, contact_id is NULL and we need group metadata
+    const contactId = isGroupMessage ? null : contact.id;
+    let groupId = null;
+    let participantJid = null;
+    let participantName = 'You';
 
-    await connection.query(
-      `UPDATE contacts SET last_interaction_at = ? WHERE id = ?`,
-      [timestamp, contact.id]
-    );
+    if (isGroupMessage) {
+      // Extract group ID from JID (remove @g.us suffix)
+      const groupIdWithoutSuffix = phone.replace('@g.us', '');
+
+      // Get group from database
+      const [groupData] = await connection.query(
+        `SELECT id FROM whatsapp_groups WHERE session_id = ? AND group_id = ?`,
+        [sessionId, groupIdWithoutSuffix]
+      );
+
+      if (groupData.length > 0) {
+        groupId = groupData[0].id;
+      }
+
+      // Get participant info from our own session
+      participantJid = null; // Will be filled by handleGroupMessage when receiving echo
+      participantName = 'You';
+    }
+
+    // Build INSERT query dynamically based on whether it's a group message
+    if (isGroupMessage && groupId) {
+      // Group message with all metadata
+      await connection.query(
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sessionId,
+          contactId,
+          messageId,
+          'outgoing',
+          messageType,
+          displayContent,
+          mediaUrl,
+          rawPayload ? JSON.stringify(rawPayload) : null,
+          timestamp,
+          'sent',
+          true,
+          groupId,
+          participantJid,
+          participantName
+        ]
+      );
+
+      // Update last_interaction_at for group
+      await connection.query(
+        `UPDATE whatsapp_groups SET last_interaction_at = ? WHERE id = ?`,
+        [timestamp, groupId]
+      );
+    } else {
+      // Private message (or group without ID yet)
+      await connection.query(
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sessionId,
+          contactId,
+          messageId,
+          'outgoing',
+          messageType,
+          displayContent,
+          mediaUrl,
+          rawPayload ? JSON.stringify(rawPayload) : null,
+          timestamp,
+          'sent'
+        ]
+      );
+
+      // Update last_interaction_at for private messages only
+      if (!isGroupMessage && contact) {
+        await connection.query(
+          `UPDATE contacts SET last_interaction_at = ? WHERE id = ?`,
+          [timestamp, contact.id]
+        );
+      }
+    }
 
     return {
       id: messageId,
-      contactId: contact.id,
+      contactId: contactId,
       direction: 'outgoing',
       type: messageType,
       content: displayContent,
@@ -773,7 +845,7 @@ async function syncContactsFromWhatsApp(sessionId, sock) {
  * Handle history sync from WhatsApp
  * Processes messages, contacts, and chats from other devices
  */
-async function handleHistorySync(sessionId, { chats, contacts, messages, syncType }, io) {
+async function handleHistorySync(sessionId, { chats, contacts, messages, syncType }, sock, io) {
   const connection = getPool();
 
   try {
@@ -789,11 +861,17 @@ async function handleHistorySync(sessionId, { chats, contacts, messages, syncTyp
     if (messages && messages.length > 0) {
       for (const msg of messages) {
         try {
-          // Skip group messages
-          if (msg.key.remoteJid?.includes('@g.us')) {
+          // Check if this is a group message
+          const isGroupMessage = msg.key.remoteJid?.includes('@g.us');
+
+          if (isGroupMessage) {
+            // Handle group messages through the group handler
+            await handleGroupMessage(sessionId, msg, sock, io, 'append');
+            processedMessages++;
             continue;
           }
 
+          // Handle private messages
           // Get and validate phone number
           let phone = msg.key.remoteJid?.split('@')[0];
           const normalizedPhone = validateAndNormalizePhone(phone);
@@ -1040,6 +1118,291 @@ function getMessageType(message) {
   if (message.message?.contactMessage) return 'contact';
   if (message.message?.protocolMessage) return 'protocol';
   return 'text';
+}
+
+/**
+ * Handle incoming group message
+ */
+async function handleGroupMessage(sessionId, message, sock, io, messageType = 'notify') {
+  const connection = getPool();
+
+  try {
+    const remoteJid = message.key.remoteJid;
+    const fromMe = message.key.fromMe;
+    const participantJid = message.key.participant || null;
+    const pushName = message.pushName || 'Unknown';
+    const messageId = message.key.id;
+
+    console.log(`👥 Processing group message:`);
+    console.log(`   - Group JID: ${remoteJid}`);
+    console.log(`   - Message ID: ${messageId}`);
+    console.log(`   - From Me: ${fromMe}`);
+    console.log(`   - Type: ${messageType}`);
+    console.log(`   - Participant: ${participantJid}`);
+    console.log(`   - Push Name: ${pushName}`);
+    console.log(`📋 FULL MESSAGE JSON:`);
+    console.log(JSON.stringify(message, null, 2));
+
+    // Upsert group - fetch/update metadata from WhatsApp
+    const groupIdWithoutSuffix = remoteJid.replace('@g.us', '');
+
+    // Check if group exists first
+    const [existingGroup] = await connection.query(
+      `SELECT * FROM whatsapp_groups WHERE session_id = ? AND group_id = ?`,
+      [sessionId, groupIdWithoutSuffix]
+    );
+
+    let group;
+    let shouldFetchMetadata = true;
+
+    if (existingGroup.length > 0) {
+      // Group exists - check if we need to refresh metadata
+      const existingGroupData = existingGroup[0];
+      const lastUpdate = existingGroupData.updated_at || existingGroupData.created_at;
+      const now = new Date();
+      const hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
+
+      // Always fetch metadata to ensure group name is up-to-date
+      console.log(`   - Existing group found: ${existingGroupData.subject} (ID: ${existingGroupData.id}, updated ${hoursSinceUpdate.toFixed(1)}h ago)`);
+    }
+
+    // Always fetch metadata from WhatsApp for groups
+    if (shouldFetchMetadata) {
+      console.log(`   - Fetching group metadata from WhatsApp...`);
+      try {
+        const groupMeta = await sock.groupMetadata(remoteJid);
+        console.log(`   - Group metadata received: ${groupMeta.subject}`);
+
+        const groupMetadata = {
+          id: remoteJid,
+          subject: groupMeta.subject || null,
+          participantCount: groupMeta.participants?.length || 0,
+          description: groupMeta.desc || null,
+          profilePicUrl: groupMeta.profilePicUrl || null
+        };
+
+        group = await groupHandlers.upsertGroup(sessionId, groupMetadata);
+
+        // Always sync participants to keep them up-to-date
+        if (groupMeta.participants && groupMeta.participants.length > 0) {
+          await groupHandlers.syncGroupParticipants(group.id, groupMeta.participants);
+          console.log(`   - Synced ${groupMeta.participants.length} participants`);
+        }
+
+        console.log(`   - Group synced: ${group.subject} (ID: ${group.id})`);
+      } catch (metaError) {
+        console.error(`   - Failed to fetch group metadata: ${metaError.message}`);
+
+        // Fallback: use existing group if available, or create with minimal metadata
+        if (existingGroup && existingGroup.length > 0) {
+          group = {
+            id: existingGroup[0].id,
+            group_id: existingGroup[0].group_id,
+            subject: existingGroup[0].subject,
+            participantCount: existingGroup[0].participant_count,
+            category: existingGroup[0].category
+          };
+          console.log(`   - Using existing group data: ${group.subject}`);
+        } else {
+          const groupMetadata = {
+            id: remoteJid,
+            subject: null,
+            participantCount: 0,
+            description: null,
+            profilePicUrl: null
+          };
+
+          group = await groupHandlers.upsertGroup(sessionId, groupMetadata);
+          console.log(`   - New group created with minimal data: ${group.subject} (ID: ${group.id})`);
+        }
+      }
+    }
+
+    // Extract message content
+    let messageContent = message.message?.conversation ||
+                          message.message?.extendedTextMessage?.text ||
+                          '[Media]';
+    let mediaUrl = null;
+
+    const msgType = getMessageType(message);
+
+    // Handle protocolMessage (REVOKE - delete message)
+    if (msgType === 'protocol') {
+      const protoMsg = message.message?.protocolMessage;
+
+      if (protoMsg?.type === 0 || protoMsg?.type === 'REVOKE') {
+        const revokedMessageId = protoMsg.key?.id;
+
+        if (revokedMessageId) {
+          console.log(`🗑️ Group message revoke detected: ${revokedMessageId}`);
+
+          await connection.query(
+            `UPDATE messages SET content = '[This message was deleted]', is_deleted = TRUE WHERE message_id = ? AND session_id = ? AND group_id = ?`,
+            [revokedMessageId, sessionId, group.id]
+          );
+
+          if (io && messageType === 'notify') {
+            io.emit('chat.groupMessageDeleted', {
+              sessionId,
+              groupId: group.id,
+              messageId: revokedMessageId
+            });
+          }
+        }
+      }
+
+      return;
+    }
+
+    // Extract media for non-text messages
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+      if (message.message?.imageMessage) {
+        const imgMsg = message.message.imageMessage;
+        messageContent = imgMsg.caption || '[Image]';
+        mediaUrl = imgMsg.url || null;
+      } else if (message.message?.videoMessage) {
+        const vidMsg = message.message.videoMessage;
+        messageContent = vidMsg.caption || '[Video]';
+        mediaUrl = vidMsg.url || null;
+      } else if (message.message?.audioMessage) {
+        mediaUrl = message.message.audioMessage.url || null;
+      } else if (message.message?.documentMessage) {
+        const docMsg = message.message.documentMessage;
+        messageContent = docMsg.caption || docMsg.fileName || '[Document]';
+        mediaUrl = docMsg.url || null;
+      }
+    }
+
+    const timestamp = new Date(message.messageTimestamp * 1000);
+    const direction = fromMe ? 'outgoing' : 'incoming';
+    const participantName = fromMe ? 'You' : pushName;
+
+    console.log(`   - Message extracted: type=${msgType}, direction=${direction}, content="${messageContent}"`);
+
+    // Check if message already exists
+    const [existing] = await connection.query(
+      `SELECT id FROM messages WHERE message_id = ? AND session_id = ? AND group_id = ?`,
+      [messageId, sessionId, group.id]
+    );
+
+    if (existing.length > 0) {
+      console.log(`⚠️ Duplicate group message skipped: ${messageId}`);
+      return;
+    }
+
+    // Save group message
+    let insertedId;
+    try {
+      const [result] = await connection.query(
+        `INSERT INTO messages (
+          session_id, contact_id, message_id, direction, message_type, content, media_url,
+          raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sessionId,
+          null, // contact_id is NULL for group messages (not linked to individual contact)
+          messageId,
+          direction,
+          msgType,
+          messageContent,
+          mediaUrl,
+          JSON.stringify(message),
+          timestamp,
+          fromMe ? 'sent' : 'delivered',
+          true,
+          group.id,
+          participantJid,
+          participantName
+        ]
+      );
+
+      insertedId = result.insertId;
+
+      console.log(`✓ Group message saved to DB:`);
+      console.log(`   - Content: ${messageContent}`);
+      console.log(`   - Type: ${msgType}`);
+      console.log(`   - Direction: ${direction}`);
+      console.log(`   - From: ${participantName}`);
+    } catch (insertError) {
+      // Ignore duplicate entry errors (message already inserted by sendMessage)
+      if (insertError.code === 'ER_DUP_ENTRY') {
+        console.log(`⚠️ Duplicate group message (already sent): ${messageId}`);
+        return;
+      }
+      throw insertError;
+    }
+
+    // Download and save media locally if it's a media message (same as private chat)
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+      try {
+        console.log(`💾 Saving media locally for group message: ${msgType}`);
+        const localMediaPath = await saveMediaLocally(message, messageId, msgType);
+        if (localMediaPath) {
+          // Update database with local media path
+          await connection.query(
+            `UPDATE messages SET media_url = ? WHERE id = ?`,
+            [localMediaPath, insertedId]
+          );
+          console.log(`✓ Media saved locally: ${localMediaPath}`);
+        }
+      } catch (mediaError) {
+        console.error('Failed to save media locally:', mediaError);
+      }
+    }
+
+    // Update last_interaction_at for group
+    await connection.query(
+      `UPDATE whatsapp_groups SET last_interaction_at = ? WHERE id = ?`,
+      [timestamp, group.id]
+    );
+
+    // Emit Socket.io event for real-time update
+    // Emit for:
+    // - New incoming messages from others (!fromMe && messageType === 'notify')
+    // - Our own outgoing messages (fromMe && messageType === 'append' - these are echoes of our sent messages)
+    const shouldEmit = io && (
+      (!fromMe && messageType === 'notify') ||  // New message from others
+      (fromMe && messageType === 'append')       // Echo of our sent message
+    );
+
+    console.log(`📡 Socket.io emit: ${shouldEmit ? 'YES' : 'NO'} (fromMe=${fromMe}, type=${messageType})`);
+
+    if (shouldEmit) {
+      const eventData = {
+        sessionId,
+        groupId: group.id,
+        group: {
+          id: group.id,
+          subject: group.subject,
+          participantCount: group.participantCount,
+          category: group.category
+        },
+        message: {
+          id: messageId,
+          direction: direction,
+          content: messageContent,
+          type: msgType,
+          mediaUrl: mediaUrl,
+          timestamp: timestamp.toISOString(),
+          status: fromMe ? 'sent' : 'delivered',
+          senderName: participantName,
+          senderJid: participantJid
+        }
+      };
+
+      console.log(`📡 Emitting event: chat.newGroupMessage`);
+      console.log(`   - Group: ${group.subject} (${group.id})`);
+      console.log(`   - Message: ${messageContent}`);
+
+      io.emit('chat.newGroupMessage', eventData);
+    }
+
+    const logPrefix = messageType === 'notify' ? '✓ New group message' : '✓ Group history message';
+    console.log(`${logPrefix} saved: group_id=${group.id}, group=${remoteJid}, content=${messageContent.substring(0, 50)}`);
+  } catch (error) {
+    console.error('Error handling group message:', error);
+    throw error;
+  }
 }
 
 export {

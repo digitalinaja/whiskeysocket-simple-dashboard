@@ -97,6 +97,11 @@
           <span class="icon">💬</span>
           <span>Chat</span>
         </a>
+        <a href="#groups" class="nav-item" data-view="groups">
+          <span class="icon">👥</span>
+          <span>Groups</span>
+          <span class="badge" id="groupsUnreadBadge" style="display: none;">0</span>
+        </a>
         <a href="#send-message" class="nav-item" data-view="send-message">
           <span class="icon">📤</span>
           <span>Send Message</span>
@@ -573,6 +578,101 @@
       </div>
     </div>
 
+    <!-- Groups View -->
+    <div id="view-groups" class="view view-flex">
+      <div class="chat-container">
+        <!-- Groups Sidebar -->
+        <div class="chat-contacts-sidebar">
+          <div class="chat-header">
+            <div class="session-selector">
+              <select id="groupsSessionSelect">
+                <option value="">Select Session...</option>
+              </select>
+            </div>
+            <div class="search-box">
+              <input type="text" id="groupsSearchInput" placeholder="Search groups...">
+            </div>
+          </div>
+
+          <!-- Category Tabs -->
+          <div class="category-tabs">
+            <button class="category-tab active" data-category="all">
+              <span class="tab-icon">📚</span>
+              <span class="tab-label">All</span>
+              <span class="tab-count" id="categoryCountAll">0</span>
+            </button>
+            <button class="category-tab" data-category="business">
+              <span class="tab-icon">💼</span>
+              <span class="tab-label">Business</span>
+              <span class="tab-count" id="categoryCountBusiness">0</span>
+            </button>
+            <button class="category-tab" data-category="internal">
+              <span class="tab-icon">👔</span>
+              <span class="tab-label">Internal</span>
+              <span class="tab-count" id="categoryCountInternal">0</span>
+            </button>
+            <button class="category-tab" data-category="personal">
+              <span class="tab-icon">🏠</span>
+              <span class="tab-label">Personal</span>
+              <span class="tab-count" id="categoryCountPersonal">0</span>
+            </button>
+          </div>
+
+          <!-- Groups List -->
+          <div class="contacts-list" id="groupsList">
+            <div class="loading-contacts">Loading groups...</div>
+          </div>
+        </div>
+
+        <!-- Group Chat Window -->
+        <div class="chat-window">
+          <div id="groupChatWelcome" class="chat-welcome">
+            <div class="welcome-icon">👥</div>
+            <h3>Welcome to Groups</h3>
+            <p>Select a group to start messaging</p>
+          </div>
+
+          <div id="groupConversation" class="chat-conversation" style="display: none;">
+            <!-- Group Chat Header -->
+            <div class="chat-window-header">
+              <div class="contact-info">
+                <div class="contact-avatar" id="groupChatAvatar">👥</div>
+                <div class="contact-details">
+                  <div class="contact-name" id="groupChatName">-</div>
+                  <div class="contact-phone" id="groupChatMeta">👤 0 members • 💼 Business</div>
+                </div>
+              </div>
+              <div class="chat-actions">
+                <button class="btn-icon" id="viewParticipantsBtn" title="View Participants">👥</button>
+                <button class="btn-icon" id="refreshGroupChatBtn" title="Sync Chat History">🔄</button>
+              </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="groupMessagesContainer">
+              <!-- Group messages will be rendered here -->
+            </div>
+
+            <!-- Message Input -->
+            <div class="message-input-area">
+              <div class="message-input-wrapper">
+                <button type="button" id="attachGroupMediaBtn" class="btn-icon attach-media-btn" title="Attach image or video">📎</button>
+                <textarea id="groupMessageInput" placeholder="Type a message to group..." rows="1"></textarea>
+                <button type="button" id="sendGroupMessageBtn" class="btn-send">➤</button>
+              </div>
+              <div class="selected-media-preview" id="selectedGroupMediaPreview" style="display: none;">
+                <div class="selected-media-chip">
+                  <span id="selectedGroupMediaLabel">media</span>
+                  <button type="button" id="clearGroupMediaBtn" class="btn-icon" title="Remove media">✕</button>
+                </div>
+              </div>
+              <input type="file" id="groupMediaInput" accept="image/*,video/*" hidden>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Contacts/CRM View -->
     <div id="view-contacts" class="view">
       <div class="page-header">
@@ -659,6 +759,7 @@
   <script src="js/jobs.js"></script>
   <script src="js/broadcast.js"></script>
   <script src="js/chat.js"></script>
+  <script src="js/groups.js"></script>
   <script src="js/crm.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
