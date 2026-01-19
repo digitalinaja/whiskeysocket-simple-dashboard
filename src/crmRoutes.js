@@ -961,6 +961,42 @@ router.get('/groups/:id/messages', async (req, res) => {
 });
 
 /**
+ * GET /api/groups/:id/participants
+ * Get group participants list
+ */
+router.get('/groups/:id/participants', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sessionId } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    // Get group by database ID (includes participants)
+    const group = await groupHandlers.getGroupById(id);
+
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Verify session matches
+    if (group.sessionId !== sessionId) {
+      return res.status(403).json({ error: 'Session mismatch' });
+    }
+
+    res.json({
+      groupId: group.id,
+      groupName: group.subject,
+      participants: group.participants || []
+    });
+  } catch (error) {
+    console.error('Error fetching group participants:', error);
+    res.status(500).json({ error: 'Failed to fetch group participants' });
+  }
+});
+
+/**
  * POST /api/groups/:id/messages
  * Send message to group
  */

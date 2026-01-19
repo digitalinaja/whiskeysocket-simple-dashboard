@@ -90,18 +90,23 @@ async function syncGroupParticipants(groupId, participants) {
   const connection = getPool();
 
   try {
+    // Strip @g.us suffix if present (in database it's stored without suffix)
+    const groupIdWithoutSuffix = groupId.replace('@g.us', '');
+
     // Get group ID from whatsapp_groups table
     const [groupData] = await connection.query(
       `SELECT id FROM whatsapp_groups WHERE group_id = ?`,
-      [groupId]
+      [groupIdWithoutSuffix]
     );
 
     if (groupData.length === 0) {
-      console.warn(`Group ${groupId} not found in database`);
+      console.warn(`⚠️ Group ${groupIdWithoutSuffix} not found in database`);
       return { synced: 0, updated: 0 };
     }
 
     const dbGroupId = groupData[0].id;
+    console.log(`✓ Found group in DB: ID=${dbGroupId}, syncing ${participants.length} participants`);
+
     let synced = 0;
     let updated = 0;
 
@@ -137,7 +142,7 @@ async function syncGroupParticipants(groupId, participants) {
       }
     }
 
-    console.log(`✓ Synced participants for group ${groupId}: ${synced} new, ${updated} updated`);
+    console.log(`✓ Synced participants for group ${groupIdWithoutSuffix}: ${synced} new, ${updated} updated`);
     return { synced, updated, total: synced + updated };
   } catch (error) {
     console.error('Error syncing group participants:', error);
@@ -302,10 +307,28 @@ async function getGroupById(dbId) {
     );
 
     if (groups.length === 0) {
+      console.log(`📂 Group not found: dbId=${dbId}`);
       return null;
     }
 
     const group = groups[0];
+    console.log(`📂 Found group: ${group.subject} (ID: ${group.id})`);
+
+    // Get participants
+    const [participants] = await connection.query(
+      `SELECT
+        participant_jid,
+        participant_name,
+        is_admin,
+        is_superadmin,
+        joined_at
+      FROM group_participants
+      WHERE group_id = ?
+      ORDER BY is_admin DESC, participant_name ASC`,
+      [dbId]
+    );
+
+    console.log(`📂 Found ${participants.length} participants in database`);
 
     return {
       id: group.id,
@@ -319,7 +342,14 @@ async function getGroupById(dbId) {
       isBroadcast: group.is_broadcast,
       category: group.category,
       createdAt: group.created_at,
-      lastInteraction: group.last_interaction_at
+      lastInteraction: group.last_interaction_at,
+      participants: participants.map(p => ({
+        jid: p.participant_jid,
+        name: p.participant_name,
+        isAdmin: p.is_admin,
+        isSuperAdmin: p.is_superadmin,
+        joinedAt: p.joined_at
+      }))
     };
   } catch (error) {
     console.error('Error getting group by ID:', error);

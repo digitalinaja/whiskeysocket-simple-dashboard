@@ -1185,7 +1185,8 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
 
         // Always sync participants to keep them up-to-date
         if (groupMeta.participants && groupMeta.participants.length > 0) {
-          await groupHandlers.syncGroupParticipants(group.id, groupMeta.participants);
+          // Use remoteJid (WhatsApp group ID with @g.us), not database ID
+          await groupHandlers.syncGroupParticipants(remoteJid, groupMeta.participants);
           console.log(`   - Synced ${groupMeta.participants.length} participants`);
         }
 

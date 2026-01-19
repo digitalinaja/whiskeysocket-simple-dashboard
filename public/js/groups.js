@@ -491,9 +491,204 @@ const Groups = {
   },
 
   // Show participants modal (placeholder)
-  showParticipants() {
-    alert('Participants modal - Coming soon!');
+  async showParticipants() {
+    if (!this.selectedGroup) {
+      this.showNotification('Please select a group first', 'error');
+      return;
+    }
+
+    try {
+      // Show loading state
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'participantsModal';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="font-size: 18px; font-weight: 600;">👥 Group Participants</h2>
+            <button class="btn-close-modal" onclick="document.getElementById('participantsModal').remove()">✕</button>
+          </div>
+          <div id="participantsLoading" style="text-align: center; padding: 40px; color: #94a3b8;">
+            Loading participants...
+          </div>
+          <div id="participantsContent"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      // Close on backdrop click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+
+      // Fetch participants from API
+      const response = await fetch(
+        `/api/groups/${this.selectedGroup.id}/participants?sessionId=${this.currentSession}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch participants');
+      }
+
+      const data = await response.json();
+
+      // Render participants
+      this.renderParticipants(data.participants, data.groupName);
+
+    } catch (error) {
+      console.error('Failed to load participants:', error);
+      this.showNotification('Failed to load participants', 'error');
+
+      // Remove modal on error
+      const modal = document.getElementById('participantsModal');
+      if (modal) modal.remove();
+    }
   },
+
+  renderParticipants(participants, groupName) {
+    const contentDiv = document.getElementById('participantsContent');
+    const loadingDiv = document.getElementById('participantsLoading');
+
+    if (!contentDiv) return;
+
+    // Remove loading
+    if (loadingDiv) loadingDiv.remove();
+
+    if (!participants || participants.length === 0) {
+      contentDiv.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #94a3b8;">
+          <div style="font-size: 48px; margin-bottom: 10px;">👥</div>
+          <p>No participants found</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Separate admins and members
+    const admins = participants.filter(p => p.isAdmin);
+    const members = participants.filter(p => !p.isAdmin);
+
+    // Add search box
+    const searchHtml = `
+      <div style="margin-bottom: 15px;">
+        <input
+          type="text"
+          id="participantSearch"
+          placeholder="🔍 Search participants..."
+          style="width: 100%;
+                 padding: 10px 12px;
+                 border: 1px solid #334155;
+                 border-radius: 6px;
+                 background: #0f172a;
+                 color: #e2e8f0;
+                 font-size: 14px;"
+        />
+      </div>
+      <div style="margin-bottom: 15px; font-size: 13px; color: #94a3b8;">
+        ${groupName} • ${participants.length} participants
+      </div>
+    `;
+
+    // Render admin section
+    let adminHtml = '';
+    if (admins.length > 0) {
+      adminHtml = `
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 13px; font-weight: 600; color: #fbbf24; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+            👑 Admins (${admins.length})
+          </h3>
+          ${admins.map(admin => this.renderParticipantItem(admin)).join('')}
+        </div>
+      `;
+    }
+
+    // Render members section
+    let membersHtml = '';
+    if (members.length > 0) {
+      membersHtml = `
+        <div>
+          <h3 style="font-size: 13px; font-weight: 600; color: #94a3b8; margin-bottom: 10px;">
+            👥 Members (${members.length})
+          </h3>
+          <div id="membersList" style="display: flex; flex-direction: column; gap: 8px;">
+            ${members.map(member => this.renderParticipantItem(member)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    contentDiv.innerHTML = searchHtml + adminHtml + membersHtml;
+
+    // Add search functionality
+    const searchInput = document.getElementById('participantSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        this.filterParticipants(query);
+      });
+    }
+  },
+
+  renderParticipantItem(participant) {
+    const name = participant.name || 'Unknown';
+    const initial = name.charAt(0).toUpperCase();
+    const adminBadge = participant.isAdmin ? '<span style="margin-left: auto; font-size: 11px; padding: 2px 8px; background: #fbbf24; color: #000; border-radius: 4px; font-weight: 600;">👑 Admin</span>' : '';
+
+    // Get avatar color based on name
+    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+    const colorIndex = name.charCodeAt(0) % colors.length;
+    const avatarColor = colors[colorIndex];
+
+    return `
+      <div class="participant-item" data-name="${name.toLowerCase()}" style="
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        background: #1e293b;
+        border: 1px solid #334155;
+      ">
+        <div style="
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: ${avatarColor};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          font-size: 14px;
+          color: white;
+          flex-shrink: 0;
+        ">${initial}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 500; font-size: 14px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${this.escapeHtml(name)}
+          </div>
+          <div style="font-size: 11px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${this.escapeHtml(participant.jid || '')}
+          </div>
+        </div>
+        ${adminBadge}
+      </div>
+    `;
+  },
+
+  filterParticipants(query) {
+    const items = document.querySelectorAll('.participant-item');
+    items.forEach(item => {
+      const name = item.dataset.name || '';
+      if (name.includes(query)) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+  },
+
 
   // Update group in list
   updateGroup(group) {
