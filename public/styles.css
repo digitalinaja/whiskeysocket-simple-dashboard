@@ -940,6 +940,174 @@ button.btn-ghost.active {
   margin-left: 4px;
 }
 
+/* Group Messages */
+.message.group-message {
+  max-width: 75%;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 8px;
+}
+
+.message.group-message.compact {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+.message.group-message.incoming {
+  align-self: flex-start;
+  flex-direction: row;
+}
+
+.message.group-message.incoming.compact {
+  margin-left: 40px !important; /* Align with first bubble (32px avatar + 8px gap) */
+}
+
+.message.group-message.outgoing {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message.group-message.outgoing.compact {
+  margin-right: 40px !important; /* Align with first bubble (32px avatar + 8px gap) */
+}
+
+.message.group-message .message-sender {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.message.group-message.incoming .message-sender {
+  align-items: flex-start;
+}
+
+.message.group-message.outgoing .message-sender {
+  align-items: flex-end;
+}
+
+.sender-name {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message.group-message.incoming .sender-name {
+  color: #94a3b8;
+  text-align: left;
+}
+
+.message.group-message.outgoing .sender-name {
+  color: rgba(0,0,0,0.5);
+  text-align: right;
+}
+
+.sender-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.message.group-message .message-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.message.group-message.incoming .message-bubble {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  border-top-left-radius: 2px;
+  padding: 8px 12px;
+}
+
+.message.group-message.outgoing .message-bubble {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 12px;
+  border-top-right-radius: 2px;
+  padding: 8px 12px;
+}
+
+/* Sender name inside bubble */
+.bubble-sender-name {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.message.group-message.incoming .bubble-sender-name {
+  color: #06b6d4;
+}
+
+.message.group-message.outgoing .bubble-sender-name {
+  color: rgba(255,255,255,0.9);
+  border-bottom-color: rgba(255,255,255,0.2);
+}
+
+.bubble-content {
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.message.group-message.compact .message-bubble {
+  padding: 8px 12px;
+}
+
+.message.group-message .message-time {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.message.group-message.incoming .message-time {
+  padding-left: 4px;
+}
+
+.message.group-message.outgoing .message-time {
+  color: rgba(0,0,0,0.5);
+  text-align: right;
+  padding-right: 4px;
+}
+
+/* Group message media */
+.message.group-message .message-media {
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.message.group-message .message-media-image,
+.message.group-message .message-media-video {
+  max-width: 320px;
+  max-height: 320px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.message.group-message .message-media-image:hover,
+.message.group-message .message-media-video:hover {
+  transform: scale(1.02);
+}
+
 /* Message Input */
 .message-input-area {
   padding: 16px 20px;

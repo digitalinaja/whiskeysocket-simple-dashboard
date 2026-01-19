@@ -455,7 +455,7 @@
     @apply justify-end;
   }
   .message-bubble {
-    @apply max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm;
+    @apply rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm;
   }
   .message.incoming .message-bubble {
     @apply bg-slate-800 text-slate-100;
@@ -467,7 +467,7 @@
     @apply bg-slate-900/40 text-slate-400;
   }
   .message-time {
-    @apply mt-1 flex items-center justify-end gap-1 text-[10px] opacity-70;
+    @apply mt-1 flex items-center gap-1 text-[10px] opacity-70;
   }
   .message-status {
     @apply ml-1;
@@ -786,9 +786,6 @@
   .group-message.incoming .sender-name {
     @apply text-indigo-400;
   }
-  .group-message.outgoing {
-    @apply justify-end;
-  }
   .group-message.outgoing .message-sender {
     @apply flex-row-reverse;
   }
@@ -807,4 +804,116 @@
   /* Group message preview with sender name */
   .contact-item-preview .sender-name {
     @apply font-medium text-slate-300;
+  }
+
+  /* Enhanced Group Message Styles */
+  .message.group-message {
+    @apply flex gap-2 max-w-[75%] mb-1;
+  }
+
+  .message.group-message.outgoing {
+    @apply ml-auto; /* Push to right */
+  }
+
+
+  .message.group-message.compact {
+    @apply mt-0.5 mb-0.5;
+  }
+
+  .message.group-message.incoming {
+    @apply self-start flex-row;
+  }
+
+  .message.group-message.incoming.compact {
+    @apply ml-8; /* 32px avatar + 8px gap = 40px */
+  }
+
+  .message.group-message.outgoing.compact {
+    @apply mr-10; /* 32px avatar + 8px gap = 40px */
+  }
+
+  /* Group Messages Container */
+  #groupMessagesContainer.messages-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  #groupMessagesContainer.messages-container > * {
+    margin-bottom: 0;
+  }
+
+
+  .message.group-message .message-sender {
+    @apply flex flex-col items-center gap-0.5 flex-shrink-0 mt-0.5;
+  }
+
+  .message.group-message.incoming .message-sender {
+    @apply items-start;
+  }
+
+  .message.group-message.outgoing .message-sender {
+    @apply items-end;
+  }
+
+  .sender-avatar {
+    @apply w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 text-white shadow-md;
+  }
+
+  .message.group-message .message-content-wrapper {
+    @apply flex flex-col gap-0.5 max-w-full;
+  }
+
+  .message.group-message.incoming .message-bubble {
+    @apply bg-slate-800 border border-slate-700 rounded-xl rounded-tl-sm px-3 py-2 inline-flex flex-col;
+  }
+
+  .message.group-message.outgoing .message-bubble {
+    @apply bg-cyan-500/90 text-slate-950 rounded-xl rounded-tr-sm px-3 py-2 inline-flex flex-col;
+  }
+
+  /* Sender name inside bubble */
+  .bubble-sender-name {
+    @apply text-xs font-bold mb-1 pb-1 border-b border-white/10;
+  }
+
+  .message.group-message.incoming .bubble-sender-name {
+    @apply text-cyan-400;
+  }
+
+  .message.group-message.outgoing .bubble-sender-name {
+    @apply text-white/90 border-b-white/20;
+  }
+
+  .bubble-content {
+    @apply whitespace-normal leading-relaxed;
+  }
+
+  .message.group-message.compact .message-bubble {
+    @apply px-3 py-2;
+  }
+
+  .message.group-message .message-time {
+    @apply text-[10px] text-slate-400 mt-0.5;
+  }
+
+  .message.group-message.incoming .message-time {
+    @apply pl-1;
+  }
+
+  .message.group-message.outgoing .message-time {
+    @apply text-white/80 text-right pr-1 justify-end;
+  }
+
+  /* Group message media */
+  .message.group-message .message-media {
+    @apply rounded-lg overflow-hidden my-0.5;
+  }
+
+  .message.group-message .message-media-image,
+  .message.group-message .message-media-video {
+    @apply max-w-[320px] max-h-[320px] rounded-lg cursor-pointer transition-transform;
+  }
+
+  .message.group-message .message-media-image:hover,
+  .message.group-message .message-media-video:hover {
+    @apply scale-[1.02];
   }

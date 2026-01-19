@@ -154,6 +154,7 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
 
     // Extract message data - LOG ALL FIELDS FOR DEBUGGING
     const remoteJid = message.key.remoteJid;
+    const remoteJidAlt = message.key.remoteJidAlt || null;
     const fromMe = message.key.fromMe;
     const participant = message.key.participant;
     const pushName = message.pushName;
@@ -174,6 +175,8 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     // SOLUTION: Use remoteJidAlt for @lid JIDs (official Baileys solution!)
     // remoteJidAlt contains the REAL JID when remoteJid is @lid
     let actualJid = remoteJid;
+    let whatsappLid = null;
+    let whatsappJid = null;
 
     // Check if this is an @lid JID (invalid JID from other devices)
     const isLidJid = remoteJid?.endsWith('@lid');
@@ -181,9 +184,13 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     if (isLidJid) {
       console.log(`⚠️ @lid JID detected in remoteJid - checking remoteJidAlt`);
 
+      // Save the LID for storage
+      whatsappLid = remoteJid;
+
       // STRATEGY 1: Use remoteJidAlt if available (OFFICIAL SOLUTION!)
       if (messageKey.remoteJidAlt && messageKey.remoteJidAlt.endsWith('@s.whatsapp.net')) {
         actualJid = messageKey.remoteJidAlt;
+        whatsappJid = messageKey.remoteJidAlt;
         console.log(`✅ Found REAL JID in remoteJidAlt: ${actualJid}`);
       }
       // STRATEGY 2: Use pushName to find existing contact (fallback)
@@ -193,6 +200,10 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       else {
         console.warn(`⚠️ No remoteJidAlt and no pushName - cannot find real JID`);
       }
+    } else if (remoteJid?.endsWith('@s.whatsapp.net')) {
+      // Normal JID
+      whatsappJid = remoteJid;
+      whatsappLid = remoteJidAlt?.endsWith('@lid') ? remoteJidAlt : null;
     }
 
     let phone = actualJid.split('@')[0];
@@ -320,7 +331,14 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
 
     // Get or create contact (with @lid workaround if needed)
     // Don't use pushName for outgoing messages to avoid saving sender's own name as recipient's name
-    const contact = await getOrCreateContact(sessionId, phone, isFromMe ? null : pushName, useLidWorkaround);
+    const contact = await getOrCreateContact(
+      sessionId,
+      phone,
+      isFromMe ? null : pushName,
+      useLidWorkaround,
+      whatsappJid,  // whatsapp_jid (from actualJid or remoteJid)
+      whatsappLid   // whatsapp_lid (from remoteJid or remoteJidAlt)
+    );
 
     console.log(`✓ Found/created contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
@@ -407,16 +425,22 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
 /**
  * Get or create contact by phone number or name
  * For messages from other devices with @lid JID, try to match by name first
+ * @param {string} sessionId - Session ID
+ * @param {string} phone - Phone number (may be null for @lid JIDs)
+ * @param {string|null} name - Contact name
+ * @param {boolean} useLidWorkaround - Whether this is a @lid workaround
+ * @param {string|null} whatsappJid - WhatsApp JID (e.g., 6281234567890@s.whatsapp.net)
+ * @param {string|null} whatsappLid - WhatsApp LID (e.g., 2701118355458787@lid)
  */
-async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaround = false) {
+async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaround = false, whatsappJid = null, whatsappLid = null) {
   const connection = getPool();
 
   try {
-    console.log(`🔍 Looking for contact: phone=${phone}, sessionId=${sessionId}, name=${name}, useLidWorkaround=${useLidWorkaround}`);
+    console.log(`🔍 Looking for contact: phone=${phone}, sessionId=${sessionId}, name=${name}, useLidWorkaround=${useLidWorkaround}, whatsappJid=${whatsappJid}, whatsappLid=${whatsappLid}`);
 
     // Normalize phone number to international format
-    const normalizedPhone = normalizePhoneNumber(phone);
-    if (!normalizedPhone) {
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+    if (phone && !normalizedPhone) {
       console.warn(`⚠️ Invalid phone number, cannot create contact: ${phone}`);
       // For @lid workaround without valid phone, still try to match by name
       if (!useLidWorkaround || !name) {
@@ -424,7 +448,64 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
       }
     }
 
-    // STRATEGY 1: If this is a @lid message (invalid JID from other device), try to match by name first
+    // STRATEGY 1: Match by whatsapp_jid or whatsapp_lid first (most reliable)
+    if (whatsappJid || whatsappLid) {
+      const matchConditions = [];
+      const params = [sessionId];
+
+      if (whatsappJid) {
+        matchConditions.push('whatsapp_jid = ?');
+        params.push(whatsappJid);
+      }
+      if (whatsappLid) {
+        matchConditions.push('whatsapp_lid = ?');
+        params.push(whatsappLid);
+      }
+
+      const [contactsById] = await connection.query(
+        `SELECT * FROM contacts WHERE session_id = ? AND (${matchConditions.join(' OR ')})`,
+        params
+      );
+
+      if (contactsById.length > 0) {
+        const contact = contactsById[0];
+        console.log(`✅ Found contact by whatsapp_jid/lid: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
+
+        // Update whatsapp_jid/lid if missing
+        const updates = [];
+        const updateParams = [];
+
+        if (whatsappJid && !contact.whatsapp_jid) {
+          updates.push('whatsapp_jid = ?');
+          updateParams.push(whatsappJid);
+        }
+        if (whatsappLid && !contact.whatsapp_lid) {
+          updates.push('whatsapp_lid = ?');
+          updateParams.push(whatsappLid);
+        }
+        if (normalizedPhone && (!contact.phone || contact.phone.length < normalizedPhone.length)) {
+          updates.push('phone = ?');
+          updateParams.push(normalizedPhone);
+        }
+        if (name && (!contact.name || contact.name === contact.phone)) {
+          updates.push('name = ?');
+          updateParams.push(name);
+        }
+
+        if (updates.length > 0) {
+          updateParams.push(contact.id);
+          await connection.query(
+            `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+            updateParams
+          );
+          console.log(`📝 Updated contact: ${updates.join(', ')}`);
+        }
+
+        return contact;
+      }
+    }
+
+    // STRATEGY 2: If this is a @lid message (invalid JID from other device), try to match by name first
     if (useLidWorkaround && name) {
       console.log(`🔍 Using @lid workaround - searching by name: ${name}`);
 
@@ -437,56 +518,92 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
         const contact = contactsByName[0];
         console.log(`✅ Found contact by NAME for @lid message: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
-        // Update phone if we have a normalized phone and existing contact has invalid/short phone
+        // Update whatsapp_jid/lid and phone if we have them
+        const updates = [];
+        const updateParams = [];
+
+        if (whatsappJid && !contact.whatsapp_jid) {
+          updates.push('whatsapp_jid = ?');
+          updateParams.push(whatsappJid);
+        }
+        if (whatsappLid && !contact.whatsapp_lid) {
+          updates.push('whatsapp_lid = ?');
+          updateParams.push(whatsappLid);
+        }
         if (normalizedPhone && (!contact.phone || contact.phone.length < normalizedPhone.length)) {
+          updates.push('phone = ?');
+          updateParams.push(normalizedPhone);
+        }
+
+        if (updates.length > 0) {
+          updateParams.push(contact.id);
           await connection.query(
-            `UPDATE contacts SET phone = ? WHERE id = ?`,
-            [normalizedPhone, contact.id]
+            `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+            updateParams
           );
-          contact.phone = normalizedPhone;
-          console.log(`📝 Updated contact phone to: ${normalizedPhone}`);
+          console.log(`📝 Updated contact: ${updates.join(', ')}`);
         }
 
         return contact;
       }
     }
 
-    // STRATEGY 2: Try to find by phone number (normal behavior) - use normalized phone
-    const [contacts] = await connection.query(
-      `SELECT * FROM contacts WHERE session_id = ? AND phone = ?`,
-      [sessionId, normalizedPhone]
-    );
+    // STRATEGY 3: Try to find by phone number (normal behavior) - use normalized phone
+    if (normalizedPhone) {
+      const [contacts] = await connection.query(
+        `SELECT * FROM contacts WHERE session_id = ? AND phone = ?`,
+        [sessionId, normalizedPhone]
+      );
 
-    if (contacts.length > 0) {
-      const contact = contacts[0];
-      console.log(`✅ Found existing contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
+      if (contacts.length > 0) {
+        const contact = contacts[0];
+        console.log(`✅ Found existing contact: id=${contact.id}, phone=${contact.phone}, name=${contact.name}`);
 
-      // Update name if provided and current name is null or is a phone number (placeholder)
-      if (name && (!contact.name || contact.name === contact.phone)) {
-        await connection.query(
-          `UPDATE contacts SET name = ? WHERE id = ?`,
-          [name, contact.id]
-        );
-        contact.name = name;
-        console.log(`📝 Updated contact name to: ${name}`);
+        // Update name and whatsapp IDs if provided
+        const updates = [];
+        const updateParams = [];
+
+        if (name && (!contact.name || contact.name === contact.phone)) {
+          updates.push('name = ?');
+          updateParams.push(name);
+        }
+        if (whatsappJid && !contact.whatsapp_jid) {
+          updates.push('whatsapp_jid = ?');
+          updateParams.push(whatsappJid);
+        }
+        if (whatsappLid && !contact.whatsapp_lid) {
+          updates.push('whatsapp_lid = ?');
+          updateParams.push(whatsappLid);
+        }
+
+        if (updates.length > 0) {
+          updateParams.push(contact.id);
+          await connection.query(
+            `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+            updateParams
+          );
+          console.log(`📝 Updated contact: ${updates.join(', ')}`);
+        }
+
+        return contact;
       }
-
-      return contact;
     }
 
-    // STRATEGY 3: For @lid messages with name, create new contact but mark it for potential merge
+    // STRATEGY 4: For @lid messages with name, create new contact but mark it for potential merge
     if (useLidWorkaround && name) {
       console.log(`➕ Creating new contact from @lid message: phone=${normalizedPhone || phone}, name=${name}`);
 
       const [result] = await connection.query(
-        `INSERT INTO contacts (session_id, phone, name, push_name, source)
-         VALUES (?, ?, ?, ?, 'whatsapp')`,
-        [sessionId, normalizedPhone || phone, name, name]
+        `INSERT INTO contacts (session_id, phone, whatsapp_jid, whatsapp_lid, name, push_name, source)
+         VALUES (?, ?, ?, ?, ?, ?, 'whatsapp')`,
+        [sessionId, normalizedPhone || phone, whatsappJid, whatsappLid, name, name]
       );
 
       const newContact = {
         id: result.insertId,
         phone: normalizedPhone || phone,
+        whatsapp_jid: whatsappJid,
+        whatsapp_lid: whatsappLid,
         name: name || normalizedPhone || phone,
         source: 'whatsapp'
       };
@@ -496,17 +613,19 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
       return newContact;
     }
 
-    // STRATEGY 4: Normal contact creation
-    console.log(`➕ Creating new contact: phone=${normalizedPhone}, name=${name}`);
+    // STRATEGY 5: Normal contact creation
+    console.log(`➕ Creating new contact: phone=${normalizedPhone}, name=${name}, whatsapp_jid=${whatsappJid}, whatsapp_lid=${whatsappLid}`);
     const [result] = await connection.query(
-      `INSERT INTO contacts (session_id, phone, name, push_name, source)
-       VALUES (?, ?, ?, ?, 'whatsapp')`,
-      [sessionId, normalizedPhone, name || normalizedPhone, name]
+      `INSERT INTO contacts (session_id, phone, whatsapp_jid, whatsapp_lid, name, push_name, source)
+       VALUES (?, ?, ?, ?, ?, ?, 'whatsapp')`,
+      [sessionId, normalizedPhone, whatsappJid, whatsappLid, name || normalizedPhone, name]
     );
 
     const newContact = {
       id: result.insertId,
       phone: normalizedPhone,
+      whatsapp_jid: whatsappJid,
+      whatsapp_lid: whatsappLid,
       name: name || normalizedPhone,
       source: 'whatsapp'
     };
@@ -1130,6 +1249,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
     const remoteJid = message.key.remoteJid;
     const fromMe = message.key.fromMe;
     const participantJid = message.key.participant || null;
+    const participantAlt = message.key.participantAlt || null;
     const pushName = message.pushName || 'Unknown';
     const messageId = message.key.id;
 
@@ -1139,6 +1259,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
     console.log(`   - From Me: ${fromMe}`);
     console.log(`   - Type: ${messageType}`);
     console.log(`   - Participant: ${participantJid}`);
+    console.log(`   - Participant Alt: ${participantAlt}`);
     console.log(`   - Push Name: ${pushName}`);
     console.log(`📋 FULL MESSAGE JSON:`);
     console.log(JSON.stringify(message, null, 2));
@@ -1186,11 +1307,36 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
         // Always sync participants to keep them up-to-date
         if (groupMeta.participants && groupMeta.participants.length > 0) {
           // Use remoteJid (WhatsApp group ID with @g.us), not database ID
-          await groupHandlers.syncGroupParticipants(remoteJid, groupMeta.participants);
+          await groupHandlers.syncGroupParticipants(remoteJid, groupMeta.participants, sessionId);
           console.log(`   - Synced ${groupMeta.participants.length} participants`);
         }
 
         console.log(`   - Group synced: ${group.subject} (ID: ${group.id})`);
+
+        // Update/Create contact for the sender using participantAlt and pushName
+        // participantAlt contains the REAL JID when participant is @lid
+        if (!fromMe && participantAlt && pushName) {
+          try {
+            const senderContact = await getOrCreateContact(
+              sessionId,
+              participantAlt.split('@')[0],  // Extract phone from participantAlt
+              pushName,
+              false,  // Not a workaround, we have the real JID
+              participantAlt.endsWith('@s.whatsapp.net') ? participantAlt : null,  // whatsapp_jid
+              participantJid?.endsWith('@lid') ? participantJid : null  // whatsapp_lid (the original participant)
+            );
+            console.log(`✓ Created/updated contact for sender: ${senderContact.id} (${senderContact.name})`);
+
+            // Update group_participants to link to this contact
+            await connection.query(
+              `UPDATE group_participants SET contact_id = ?, participant_name = ? WHERE group_id = ? AND participant_jid = ?`,
+              [senderContact.id, pushName, group.id, participantJid]
+            );
+            console.log(`✓ Linked participant ${participantJid} to contact ${senderContact.id}`);
+          } catch (contactError) {
+            console.warn(`⚠️ Could not create/update contact for sender: ${contactError.message}`);
+          }
+        }
       } catch (metaError) {
         console.error(`   - Failed to fetch group metadata: ${metaError.message}`);
 

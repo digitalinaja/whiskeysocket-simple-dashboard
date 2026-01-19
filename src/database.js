@@ -47,6 +47,8 @@ async function initDatabase() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         session_id VARCHAR(255) NOT NULL,
         phone VARCHAR(20) NOT NULL,
+        whatsapp_jid VARCHAR(255) NULL,
+        whatsapp_lid VARCHAR(255) NULL,
         name VARCHAR(255),
         profile_pic_url TEXT,
         push_name VARCHAR(255),
@@ -62,6 +64,8 @@ async function initDatabase() {
         last_interaction_at TIMESTAMP NULL,
         INDEX idx_session_phone (session_id, phone),
         INDEX idx_phone (phone),
+        INDEX idx_whatsapp_jid (whatsapp_jid),
+        INDEX idx_whatsapp_lid (whatsapp_lid),
         INDEX idx_last_interaction (last_interaction_at),
         INDEX idx_google_contact (google_contact_id),
         INDEX idx_is_group (is_group)
@@ -85,6 +89,44 @@ async function initDatabase() {
     } catch (err) {
       if (err.code !== 'ER_DUP_FIELDNAME') {
         console.log('Note: group_subject column check:', err.message);
+      }
+    }
+
+    // Add whatsapp_jid and whatsapp_lid columns if they don't exist
+    try {
+      await connection.query(`ALTER TABLE contacts ADD COLUMN whatsapp_jid VARCHAR(255) NULL AFTER phone`);
+      console.log('✓ Added whatsapp_jid column to contacts table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.log('Note: whatsapp_jid column check:', err.message);
+      }
+    }
+
+    try {
+      await connection.query(`ALTER TABLE contacts ADD COLUMN whatsapp_lid VARCHAR(255) NULL AFTER whatsapp_jid`);
+      console.log('✓ Added whatsapp_lid column to contacts table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.log('Note: whatsapp_lid column check:', err.message);
+      }
+    }
+
+    // Add indexes for whatsapp_jid and whatsapp_lid if they don't exist
+    try {
+      await connection.query(`ALTER TABLE contacts ADD INDEX idx_whatsapp_jid (whatsapp_jid)`);
+      console.log('✓ Added idx_whatsapp_jid index to contacts table');
+    } catch (err) {
+      if (!err.message.includes('Duplicate key name')) {
+        console.log('Note: idx_whatsapp_jid index check:', err.message);
+      }
+    }
+
+    try {
+      await connection.query(`ALTER TABLE contacts ADD INDEX idx_whatsapp_lid (whatsapp_lid)`);
+      console.log('✓ Added idx_whatsapp_lid index to contacts table');
+    } catch (err) {
+      if (!err.message.includes('Duplicate key name')) {
+        console.log('Note: idx_whatsapp_lid index check:', err.message);
       }
     }
 
@@ -240,14 +282,52 @@ async function initDatabase() {
         participant_name VARCHAR(255),
         is_admin BOOLEAN DEFAULT FALSE,
         is_superadmin BOOLEAN DEFAULT FALSE,
+        contact_id INT NULL,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (group_id) REFERENCES whatsapp_groups(id) ON DELETE CASCADE,
+        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
         INDEX idx_group_id (group_id),
         INDEX idx_participant_jid (participant_jid),
+        INDEX idx_contact_id (contact_id),
         UNIQUE KEY unique_participant (group_id, participant_jid)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ group_participants table created/verified');
+
+    // Add contact_id column to group_participants if it doesn't exist
+    try {
+      await connection.query(`ALTER TABLE group_participants ADD COLUMN contact_id INT NULL AFTER is_superadmin`);
+      console.log('✓ Added contact_id column to group_participants table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.log('Note: contact_id column check:', err.message);
+      }
+    }
+
+    // Add foreign key constraint for contact_id if it doesn't exist
+    try {
+      await connection.query(`
+        ALTER TABLE group_participants
+        ADD CONSTRAINT fk_group_participants_contact_id
+        FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
+      `);
+      console.log('✓ Added foreign key constraint for contact_id');
+    } catch (err) {
+      // May fail if constraint doesn't exist or already updated
+      if (!err.message.includes('Foreign key constraint')) {
+        console.log('Note: contact_id foreign key check:', err.message);
+      }
+    }
+
+    // Add index for contact_id if it doesn't exist
+    try {
+      await connection.query(`ALTER TABLE group_participants ADD INDEX idx_contact_id (contact_id)`);
+      console.log('✓ Added idx_contact_id index to group_participants table');
+    } catch (err) {
+      if (!err.message.includes('Duplicate key name')) {
+        console.log('Note: idx_contact_id index check:', err.message);
+      }
+    }
 
     // Add group message columns to messages table if they don't exist
     try {

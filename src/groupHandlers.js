@@ -1,6 +1,7 @@
 // Group Handlers - Manage WhatsApp Groups
 
 import { getPool } from './database.js';
+import { getOrCreateContact } from './chatHandlers.js';
 
 /**
  * Upsert group from WhatsApp metadata
@@ -51,7 +52,7 @@ async function upsertGroup(sessionId, groupMetadata) {
         ]
       );
 
-      console.log(`✓ Updated group: ${groupData.subject}`);
+      console.log(`✓ Updated group: ${groupData.subject} with ${groupData.participant_count} participants`);
       return { ...groupData, id: existing[0].id };
     } else {
       // Create new group
@@ -74,7 +75,7 @@ async function upsertGroup(sessionId, groupMetadata) {
         ]
       );
 
-      console.log(`✓ Created new group: ${groupData.subject}`);
+      console.log(`✓ Created new group: ${groupData.subject} with ${groupData.participant_count} participants`);
       return { ...groupData, id: result.insertId };
     }
   } catch (error) {
@@ -85,8 +86,9 @@ async function upsertGroup(sessionId, groupMetadata) {
 
 /**
  * Sync group participants from metadata
+ * Auto-creates contacts and links them to participants
  */
-async function syncGroupParticipants(groupId, participants) {
+async function syncGroupParticipants(groupId, participants, sessionId = null) {
   const connection = getPool();
 
   try {
@@ -95,25 +97,73 @@ async function syncGroupParticipants(groupId, participants) {
 
     // Get group ID from whatsapp_groups table
     const [groupData] = await connection.query(
-      `SELECT id FROM whatsapp_groups WHERE group_id = ?`,
+      `SELECT id, session_id FROM whatsapp_groups WHERE group_id = ?`,
       [groupIdWithoutSuffix]
     );
 
     if (groupData.length === 0) {
       console.warn(`⚠️ Group ${groupIdWithoutSuffix} not found in database`);
-      return { synced: 0, updated: 0 };
+      return { synced: 0, updated: 0, contactsLinked: 0 };
     }
 
     const dbGroupId = groupData[0].id;
+    const actualSessionId = sessionId || groupData[0].session_id;
     console.log(`✓ Found group in DB: ID=${dbGroupId}, syncing ${participants.length} participants`);
 
     let synced = 0;
     let updated = 0;
+    let contactsLinked = 0;
 
     for (const participant of participants) {
       const jid = participant.id;
       const name = participant.name || null;
       const isAdmin = participant.isAdmin || false;
+
+      // Extract whatsapp_jid and whatsapp_lid from participant JID
+      // Baileys 7.x.x: participant.id can be either @lid or @s.whatsapp.net
+      let whatsappJid = null;
+      let whatsappLid = null;
+      let phone = null;
+
+      if (jid.endsWith('@s.whatsapp.net')) {
+        // Normal JID with phone number
+        whatsappJid = jid;
+        phone = jid.split('@')[0];
+        whatsappLid = null;
+      } else if (jid.endsWith('@lid')) {
+        // LID format - no phone number directly available
+        whatsappLid = jid;
+        whatsappJid = null;
+        phone = null;
+      } else {
+        // Unknown format, treat as phone number
+        phone = jid;
+      }
+
+      // Auto-create or get contact for this participant
+      let contactId = null;
+      try {
+        // For LID participants without name, skip contact creation temporarily
+        // They will be created/updated when we receive actual messages with participantAlt
+        if (whatsappLid && !name) {
+          console.log(`⏭️ Skipping contact creation for LID participant without name: ${jid}`);
+        } else {
+          const contact = await getOrCreateContact(
+            actualSessionId,
+            phone,
+            name,
+            whatsappLid ? true : false,  // useLidWorkaround
+            whatsappJid,
+            whatsappLid
+          );
+          contactId = contact.id;
+          contactsLinked++;
+          console.log(`✓ Linked participant ${jid} to contact ${contactId} (${contact.name})`);
+        }
+      } catch (contactError) {
+        console.warn(`⚠️ Could not create contact for participant ${jid}: ${contactError.message}`);
+        // Continue without linking to contact
+      }
 
       // Check if participant exists
       const [existing] = await connection.query(
@@ -122,28 +172,36 @@ async function syncGroupParticipants(groupId, participants) {
       );
 
       if (existing.length > 0) {
-        // Update if name or admin status changed
+        // Update if name, admin status, or contact_id changed
         await connection.query(
           `UPDATE group_participants SET
             participant_name = ?,
-            is_admin = ?
+            is_admin = ?,
+            contact_id = ?
           WHERE id = ?`,
-          [name, isAdmin, existing[0].id]
+          [name, isAdmin, contactId, existing[0].id]
         );
         updated++;
       } else {
-        // Insert new participant
+        // Insert new participant with contact link
         await connection.query(
-          `INSERT INTO group_participants (group_id, participant_jid, participant_name, is_admin)
-           VALUES (?, ?, ?, ?)`,
-          [dbGroupId, jid, name, isAdmin]
+          `INSERT INTO group_participants (group_id, participant_jid, participant_name, is_admin, contact_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [dbGroupId, jid, name, isAdmin, contactId]
         );
         synced++;
       }
     }
 
-    console.log(`✓ Synced participants for group ${groupIdWithoutSuffix}: ${synced} new, ${updated} updated`);
-    return { synced, updated, total: synced + updated };
+    // Update participant_count in whatsapp_groups table
+    await connection.query(
+      `UPDATE whatsapp_groups SET participant_count = ? WHERE id = ?`,
+      [participants.length, dbGroupId]
+    );
+    console.log(`✓ Updated participant_count to ${participants.length} for group ${groupIdWithoutSuffix}`);
+
+    console.log(`✓ Synced participants for group ${groupIdWithoutSuffix}: ${synced} new, ${updated} updated, ${contactsLinked} contacts linked`);
+    return { synced, updated, contactsLinked, total: synced + updated };
   } catch (error) {
     console.error('Error syncing group participants:', error);
     throw error;
@@ -163,7 +221,9 @@ async function getGroupsByCategory(sessionId, category = 'all') {
         wg.session_id,
         wg.group_id,
         wg.subject,
-        wg.participant_count,
+        (
+          SELECT COUNT(*) FROM group_participants WHERE group_id = wg.id
+        ) as participant_count,
         wg.category,
         wg.last_interaction_at,
         wg.created_at,
@@ -241,9 +301,13 @@ async function getGroupDetails(sessionId, groupId) {
   try {
     const groupIdWithoutSuffix = groupId.replace('@g.us', '');
 
-    // Get group info
+    // Get group info with real-time participant count
     const [groups] = await connection.query(
-      `SELECT * FROM whatsapp_groups WHERE session_id = ? AND group_id = ?`,
+      `SELECT *,
+        (
+          SELECT COUNT(*) FROM group_participants WHERE group_id = whatsapp_groups.id
+        ) as participant_count
+       FROM whatsapp_groups WHERE session_id = ? AND group_id = ?`,
       [sessionId, groupIdWithoutSuffix]
     );
 
@@ -253,17 +317,25 @@ async function getGroupDetails(sessionId, groupId) {
 
     const group = groups[0];
 
-    // Get participants
+    // Get participants with contact information
     const [participants] = await connection.query(
       `SELECT
-        participant_jid,
-        participant_name,
-        is_admin,
-        is_superadmin,
-        joined_at
-      FROM group_participants
-      WHERE group_id = ?
-      ORDER BY is_admin DESC, participant_name ASC`,
+        gp.participant_jid,
+        gp.participant_name,
+        gp.is_admin,
+        gp.is_superadmin,
+        gp.joined_at,
+        gp.contact_id,
+        c.phone as contact_phone,
+        c.name as contact_name,
+        c.profile_pic_url as contact_profile_pic,
+        c.whatsapp_jid,
+        c.whatsapp_lid,
+        c.lead_status_id
+      FROM group_participants gp
+      LEFT JOIN contacts c ON gp.participant_jid = c.whatsapp_lid
+      WHERE gp.group_id = ?
+      ORDER BY gp.is_admin DESC, COALESCE(c.name, gp.participant_name, gp.participant_jid) ASC`,
       [group.id]
     );
 
@@ -282,10 +354,19 @@ async function getGroupDetails(sessionId, groupId) {
       lastInteraction: group.last_interaction_at,
       participants: participants.map(p => ({
         jid: p.participant_jid,
-        name: p.participant_name,
+        name: p.contact_name || p.participant_name || p.participant_jid?.split('@')[0] || 'Unknown',
         isAdmin: p.is_admin,
         isSuperAdmin: p.is_superadmin,
-        joinedAt: p.joined_at
+        joinedAt: p.joined_at,
+        contact: p.contact_id ? {
+          id: p.contact_id,
+          phone: p.contact_phone,
+          name: p.contact_name,
+          profilePicUrl: p.contact_profile_pic,
+          whatsappJid: p.whatsapp_jid,
+          whatsappLid: p.whatsapp_lid,
+          leadStatusId: p.lead_status_id
+        } : null
       }))
     };
   } catch (error) {
@@ -302,7 +383,11 @@ async function getGroupById(dbId) {
 
   try {
     const [groups] = await connection.query(
-      `SELECT * FROM whatsapp_groups WHERE id = ?`,
+      `SELECT *,
+        (
+          SELECT COUNT(*) FROM group_participants WHERE group_id = whatsapp_groups.id
+        ) as participant_count
+       FROM whatsapp_groups WHERE id = ?`,
       [dbId]
     );
 
@@ -312,19 +397,27 @@ async function getGroupById(dbId) {
     }
 
     const group = groups[0];
-    console.log(`📂 Found group: ${group.subject} (ID: ${group.id})`);
+    console.log(`📂 Found group: ${group.subject} (ID: ${group.id}, participants: ${group.participant_count})`);
 
-    // Get participants
+    // Get participants with contact information
     const [participants] = await connection.query(
       `SELECT
-        participant_jid,
-        participant_name,
-        is_admin,
-        is_superadmin,
-        joined_at
-      FROM group_participants
-      WHERE group_id = ?
-      ORDER BY is_admin DESC, participant_name ASC`,
+        gp.participant_jid,
+        gp.participant_name,
+        gp.is_admin,
+        gp.is_superadmin,
+        gp.joined_at,
+        gp.contact_id,
+        c.phone as contact_phone,
+        c.name as contact_name,
+        c.profile_pic_url as contact_profile_pic,
+        c.whatsapp_jid,
+        c.whatsapp_lid,
+        c.lead_status_id
+      FROM group_participants gp
+      LEFT JOIN contacts c ON gp.participant_jid = c.whatsapp_lid
+      WHERE gp.group_id = ?
+      ORDER BY gp.is_admin DESC, COALESCE(c.name, gp.participant_name) ASC`,
       [dbId]
     );
 
@@ -345,10 +438,19 @@ async function getGroupById(dbId) {
       lastInteraction: group.last_interaction_at,
       participants: participants.map(p => ({
         jid: p.participant_jid,
-        name: p.participant_name,
+        name: p.contact_name || p.participant_name || p.participant_jid?.split('@')[0] || 'Unknown',
         isAdmin: p.is_admin,
         isSuperAdmin: p.is_superadmin,
-        joinedAt: p.joined_at
+        joinedAt: p.joined_at,
+        contact: p.contact_id ? {
+          id: p.contact_id,
+          phone: p.contact_phone,
+          name: p.contact_name,
+          profilePicUrl: p.contact_profile_pic,
+          whatsappJid: p.whatsapp_jid,
+          whatsappLid: p.whatsapp_lid,
+          leadStatusId: p.lead_status_id
+        } : null
       }))
     };
   } catch (error) {

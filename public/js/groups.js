@@ -275,7 +275,7 @@ const Groups = {
   },
 
   // Select a group
-  selectGroup(groupId) {
+  async selectGroup(groupId) {
     const group = this.groups.find(g => g.id === groupId);
     if (!group) return;
 
@@ -292,6 +292,20 @@ const Groups = {
     // Show chat conversation
     document.getElementById('groupChatWelcome').style.display = 'none';
     document.getElementById('groupConversation').style.display = 'flex';
+
+    // Fetch fresh group info to get accurate participant count
+    try {
+      const response = await fetch(`/api/groups/${groupId}?sessionId=${this.currentSession}`);
+      if (response.ok) {
+        const freshGroupData = await response.json();
+        // Update local group data with fresh data
+        if (freshGroupData.group) {
+          Object.assign(group, freshGroupData.group);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch fresh group info, using cached data:', error);
+    }
 
     // Update group info in header
     document.getElementById('groupChatName').textContent = group.subject;
@@ -335,17 +349,56 @@ const Groups = {
       return;
     }
 
-    container.innerHTML = messages.map(msg => this.renderMessage(msg)).join('');
+    // Group consecutive messages from same sender
+    const groupedMessages = [];
+    let lastSender = null;
+    let lastDirection = null;
+
+    messages.forEach(msg => {
+      const sender = msg.senderName || (msg.direction === 'incoming' ? 'Someone' : 'You');
+      const direction = msg.direction;
+
+      if (lastSender === sender && lastDirection === direction) {
+        // Same sender, add to last group
+        groupedMessages[groupedMessages.length - 1].push(msg);
+      } else {
+        // New sender or direction, create new group
+        groupedMessages.push([msg]);
+        lastSender = sender;
+        lastDirection = direction;
+      }
+    });
+
+    container.innerHTML = groupedMessages.map(group => {
+      const firstMsg = group[0];
+      const isIncoming = firstMsg.direction === 'incoming';
+
+      // If multiple consecutive messages from same sender, show compact view
+      if (group.length > 1) {
+        return `
+          <div class="message-group ${isIncoming ? 'incoming' : 'outgoing'}">
+            ${group.map((msg, idx) => this.renderMessage(msg, idx === 0, idx === group.length - 1)).join('')}
+          </div>
+        `;
+      } else {
+        return this.renderMessage(firstMsg, true, true);
+      }
+    }).join('');
 
     // Scroll to bottom
     this.scrollToBottom();
   },
 
   // Render single message
-  renderMessage(message) {
+  renderMessage(message, showSender = true, showTime = true) {
     const isIncoming = message.direction === 'incoming';
     const senderName = message.senderName || (isIncoming ? 'Someone' : 'You');
     const senderInitial = senderName.charAt(0).toUpperCase();
+
+    // Get avatar color based on sender name
+    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
+    const colorIndex = senderName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    const avatarColor = colors[colorIndex];
 
     let mediaHtml = '';
     if (message.mediaUrl) {
@@ -376,22 +429,62 @@ const Groups = {
 
     const time = this.formatTime(message.timestamp);
 
+    // Compact message (no avatar) for consecutive messages
+    if (!showSender) {
+      return `
+        <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact">
+          <div class="message-content-wrapper">
+            ${mediaHtml}
+            ${message.content ? `
+              <div class="message-bubble">
+                ${this.escapeHtml(message.content)}
+              </div>
+            ` : ''}
+            ${showTime ? `
+              <div class="message-time">
+                ${time}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Full message with avatar and sender name inside bubble
+    const senderNameHtml = isIncoming && showSender ? `
+      <div class="bubble-sender-name">${this.escapeHtml(senderName)}</div>
+    ` : '';
+
     return `
       <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message">
-        <div class="message-sender">
-          <span class="sender-name">${this.escapeHtml(senderName)}</span>
-          <span class="sender-avatar">${this.escapeHtml(senderInitial)}</span>
-        </div>
+        ${isIncoming ? `
+          <div class="message-sender">
+            <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+          </div>
+        ` : ''}
 
         <div class="message-content-wrapper">
           ${mediaHtml}
-          <div class="message-bubble">
-            ${this.escapeHtml(message.content || '')}
-          </div>
-          <div class="message-time">
-            ${time}
-          </div>
+          ${message.content || senderNameHtml ? `
+            <div class="message-bubble">
+              ${senderNameHtml}
+              ${message.content ? `
+                <div class="bubble-content">${this.escapeHtml(message.content)}</div>
+              ` : ''}
+            </div>
+          ` : ''}
+          ${showTime ? `
+            <div class="message-time">
+              ${time}
+            </div>
+          ` : ''}
         </div>
+
+        ${!isIncoming ? `
+          <div class="message-sender">
+            <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+          </div>
+        ` : ''}
       </div>
     `;
   },
