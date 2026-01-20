@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Alhikmah CRM</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', ui-sans-serif, system-ui;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 450px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .logo-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      margin: 0 auto 20px;
+      color: white;
+    }
+
+    h1 {
+      color: #2d3748;
+      font-size: 28px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #718096;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info-box {
+      background: #f7fafc;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 25px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #4a5568;
+    }
+
+    .info-box strong {
+      color: #2d3748;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .login-btn:active {
+      transform: translateY(0);
+    }
+
+    .login-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-message {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+      font-size: 14px;
+    }
+
+    .status-message.success {
+      background: #c6f6d5;
+      color: #22543d;
+      border: 1px solid #9ae6b4;
+      display: block;
+    }
+
+    .status-message.error {
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #fc8181;
+      display: block;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .user-info {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f7fafc;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .user-info.show {
+      display: block;
+    }
+
+    .user-info-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
+    }
+
+    .user-info-item:last-child {
+      border-bottom: none;
+    }
+
+    .user-info-label {
+      color: #718096;
+      font-weight: 500;
+    }
+
+    .user-info-value {
+      color: #2d3748;
+      font-weight: 600;
+    }
+
+    .countdown {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 13px;
+      color: #667eea;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">
+      <div class="logo-icon">W</div>
+      <h1>Alhikmah CRM</h1>
+      <p class="subtitle">WhatsApp Dashboard & CRM System</p>
+    </div>
+
+    <div class="info-box">
+      <strong>🔒 Login Required</strong><br>
+      You need to login to access the dashboard.<br>
+      This is a test login page for development purposes.
+    </div>
+
+    <button id="loginBtn" class="login-btn" onclick="handleLogin()">
+      🔑 Test Login (Development)
+    </button>
+
+    <div id="statusMessage" class="status-message"></div>
+
+    <div id="userInfo" class="user-info">
+      <div class="user-info-item">
+        <span class="user-info-label">User ID:</span>
+        <span class="user-info-value" id="userId">-</span>
+      </div>
+      <div class="user-info-item">
+        <span class="user-info-label">Email:</span>
+        <span class="user-info-value" id="userEmail">-</span>
+      </div>
+      <div class="user-info-item">
+        <span class="user-info-label">Name:</span>
+        <span class="user-info-value" id="userName">-</span>
+      </div>
+      <div class="user-info-item">
+        <span class="user-info-label">Role:</span>
+        <span class="user-info-value" id="userRole">-</span>
+      </div>
+      <div class="user-info-item">
+        <span class="user-info-label">Expires In:</span>
+        <span class="user-info-value">24 hours</span>
+      </div>
+    </div>
+
+    <div id="countdown" class="countdown" style="display: none;"></div>
+  </div>
+
+  <script>
+    async function handleLogin() {
+      const loginBtn = document.getElementById('loginBtn');
+      const statusMessage = document.getElementById('statusMessage');
+      const userInfo = document.getElementById('userInfo');
+      const countdown = document.getElementById('countdown');
+
+      // Disable button and show loading
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = '<span class="loading"></span>Logging in...';
+      statusMessage.className = 'status-message';
+      statusMessage.textContent = '';
+      userInfo.classList.remove('show');
+      countdown.style.display = 'none';
+
+      try {
+        // Call test login API endpoint
+        const response = await fetch('/api/test-login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          // Show success message
+          statusMessage.className = 'status-message success';
+          statusMessage.textContent = '✓ ' + data.message;
+
+          // Show user info
+          document.getElementById('userId').textContent = data.user.user_id;
+          document.getElementById('userEmail').textContent = data.user.email;
+          document.getElementById('userName').textContent = data.user.name;
+          document.getElementById('userRole').textContent = data.user.role;
+          userInfo.classList.add('show');
+
+          // Update button
+          loginBtn.innerHTML = '✓ Login Successful!';
+
+          // Countdown to redirect
+          let secondsLeft = 3;
+          countdown.style.display = 'block';
+          countdown.textContent = `Redirecting to dashboard in ${secondsLeft} seconds...`;
+
+          const countdownInterval = setInterval(() => {
+            secondsLeft--;
+            countdown.textContent = `Redirecting to dashboard in ${secondsLeft} seconds...`;
+
+            if (secondsLeft <= 0) {
+              clearInterval(countdownInterval);
+              window.location.href = '/';
+            }
+          }, 1000);
+
+        } else {
+          throw new Error('Login failed');
+        }
+
+      } catch (error) {
+        console.error('Login error:', error);
+        statusMessage.className = 'status-message error';
+        statusMessage.textContent = '✗ Login failed. Please try again.';
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = '🔑 Test Login (Development)';
+      }
+    }
+
+    // Check if already logged in on page load
+    window.addEventListener('load', async () => {
+      try {
+        const response = await fetch('/api/auth/check');
+        const data = await response.json();
+
+        if (data.authenticated) {
+          // Already logged in, redirect to dashboard
+          document.getElementById('statusMessage').className = 'status-message success';
+          document.getElementById('statusMessage').textContent = '✓ You are already logged in. Redirecting...';
+
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1500);
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+      }
+    });
+  </script>
+</body>
+</html>

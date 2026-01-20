@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import session from 'express-session';
+import cookieParser from 'cookie-parser';
 import { fileURLToPath } from "url";
 import startWA from "./baileys.js";
 import initSocket from "./socket.js";
@@ -11,6 +12,8 @@ import { initDatabase, testConnection, createDefaultLeadStatuses } from "./datab
 import * as chatHandlers from "./chatHandlers.js";
 import * as googleContacts from "./googleContacts.js";
 import crmRoutes from "./crmRoutes.js";
+import { authenticateToken, checkAuthStatus } from "./authMiddleware.js";
+import jwt from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +27,10 @@ const JOBS_ROOT = path.join(__dirname, "..", "jobs");
 const DEFAULT_SESSION_ID = "default";
 const sessions = new Map();
 const broadcastJobs = new Map();
+
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET || '123';
+const JWT_COOKIE_NAME = process.env.JWT_COOKIE_NAME || 'sso_token';
 
 // Store sessions in app for access by routes
 app.set('sessions', sessions);
@@ -48,6 +55,9 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 // Serve media folder for downloaded media files
 app.use('/media', express.static(path.join(__dirname, "..", "media")));
 
+// Cookie parser middleware for JWT token
+app.use(cookieParser());
+
 // Session middleware for Google OAuth
 app.use(session({
   secret: process.env.SESSION_SECRET || 'whiskeysocket_session_secret',
@@ -59,8 +69,68 @@ app.use(session({
   }
 }));
 
-// Mount CRM API routes
-app.use('/api', crmRoutes);
+// Authentication check endpoint (public - for frontend to verify login status)
+// Must be defined before /api routes to avoid authentication requirement
+app.get('/api/auth/check', checkAuthStatus, (req, res) => {
+  res.json({
+    authenticated: req.isAuthenticated || false,
+    user: req.user || null
+  });
+});
+
+// ============================================
+// TEST LOGIN ENDPOINT (HANYA UNTUK TESTING!)
+// ============================================
+// HAPUS endpoint ini di production!
+
+// Serve login page
+app.get('/test-login', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'test-login.html'));
+});
+
+// API endpoint untuk test login
+app.post('/api/test-login', (req, res) => {
+  // Create test user data
+  const testUser = {
+    user_id: 'test-user-123',
+    email: 'test@example.com',
+    name: 'Test User',
+    role: 'admin'
+  };
+
+  // Generate JWT token
+  const token = jwt.sign(testUser, JWT_SECRET, { expiresIn: '24h' });
+
+  // Set cookie
+  res.cookie(JWT_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: false,  // Set to true if using HTTPS
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000  // 24 hours
+  });
+
+  // Send response dengan token info (untuk testing)
+  res.json({
+    success: true,
+    message: 'Test login successful! You are now logged in.',
+    user: testUser,
+    token: token,  // Hanya untuk testing - jangan kirim token di response di production!
+    cookieName: JWT_COOKIE_NAME,
+    expiresIn: '24 hours'
+  });
+});
+
+// Test logout endpoint
+app.get('/test-logout', (req, res) => {
+  res.clearCookie(JWT_COOKIE_NAME);
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
+});
+
+// Mount CRM API routes with authentication
+app.use('/api', authenticateToken, crmRoutes);
 
 // Google OAuth routes
 app.get('/auth/google', (req, res) => {
@@ -85,8 +155,8 @@ app.get('/auth/google/callback', async (req, res) => {
   }
 });
 
-// Google sync API routes
-app.get('/api/google/sync-status', async (req, res) => {
+// Google sync API routes (protected)
+app.get('/api/google/sync-status', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.query;
     if (!sessionId) {
@@ -101,7 +171,7 @@ app.get('/api/google/sync-status', async (req, res) => {
   }
 });
 
-app.post('/api/google/sync-contacts', async (req, res) => {
+app.post('/api/google/sync-contacts', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId) {
@@ -120,7 +190,7 @@ app.post('/api/google/sync-contacts', async (req, res) => {
   }
 });
 
-app.post('/api/google/disconnect', async (req, res) => {
+app.post('/api/google/disconnect', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId) {
@@ -135,8 +205,8 @@ app.post('/api/google/disconnect', async (req, res) => {
   }
 });
 
-// WhatsApp contacts sync route
-app.post('/api/whatsapp/sync-contacts', async (req, res) => {
+// WhatsApp contacts sync route (protected)
+app.post('/api/whatsapp/sync-contacts', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId) {
@@ -697,7 +767,7 @@ function createBroadcastJob(
   return job;
 }
 
-app.get("/sessions", (req, res) => {
+app.get("/sessions", authenticateToken, (req, res) => {
   const list = Array.from(sessions.values()).map((s) => ({
     id: s.id,
     state: s.status.state,
@@ -707,7 +777,7 @@ app.get("/sessions", (req, res) => {
   res.json({ sessions: list });
 });
 
-app.post("/sessions", async (req, res) => {
+app.post("/sessions", authenticateToken, async (req, res) => {
   const { id } = req.body;
   const sessionId = String(id || "").trim();
   if (!sessionId) return res.status(400).json({ error: "Session id required" });
@@ -722,14 +792,14 @@ app.post("/sessions", async (req, res) => {
   }
 });
 
-app.get("/sessions/:id/status", (req, res) => {
+app.get("/sessions/:id/status", authenticateToken, (req, res) => {
   const { id } = req.params;
   const session = sessions.get(id);
   if (!session) return res.status(404).json({ error: "Session not found" });
   res.json({ sessionId: id, ...session.status, user: session.user });
 });
 
-app.post("/sessions/:id/send", async (req, res) => {
+app.post("/sessions/:id/send", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const session = getSessionOrError(id, res);
   if (!session) return;
@@ -751,7 +821,7 @@ app.post("/sessions/:id/send", async (req, res) => {
   }
 });
 
-app.post("/sessions/:id/broadcast", async (req, res) => {
+app.post("/sessions/:id/broadcast", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const session = getSessionOrError(id, res);
   if (!session) return;
@@ -797,8 +867,8 @@ app.post("/sessions/:id/broadcast", async (req, res) => {
   });
 });
 
-// Personalized broadcast endpoint
-app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
+// Personalized broadcast endpoint (protected)
+app.post("/sessions/:id/broadcast-personalized", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const session = getSessionOrError(id, res);
   if (!session) return;
@@ -961,7 +1031,7 @@ app.post("/sessions/:id/broadcast-personalized", async (req, res) => {
   });
 });
 
-app.get("/sessions/:id/broadcast/:jobId", (req, res) => {
+app.get("/sessions/:id/broadcast/:jobId", authenticateToken, (req, res) => {
   const { id, jobId } = req.params;
   const job = broadcastJobs.get(jobId);
   if (!job || job.sessionId !== id) {
@@ -970,7 +1040,7 @@ app.get("/sessions/:id/broadcast/:jobId", (req, res) => {
   res.json({ job });
 });
 
-app.get("/sessions/:id/broadcast", (req, res) => {
+app.get("/sessions/:id/broadcast", authenticateToken, (req, res) => {
   const { id } = req.params;
   const jobs = Array.from(broadcastJobs.values())
     .filter((j) => j.sessionId === id)
@@ -978,8 +1048,8 @@ app.get("/sessions/:id/broadcast", (req, res) => {
   res.json({ jobs });
 });
 
-// Get all jobs with optional date filter
-app.get("/jobs", (req, res) => {
+// Get all jobs with optional date filter (protected)
+app.get("/jobs", authenticateToken, (req, res) => {
   const { startDate, endDate, limit = 100 } = req.query;
 
   let jobs = Array.from(broadcastJobs.values());
@@ -1024,7 +1094,7 @@ function clearSessionJobs(sessionId) {
   }
 }
 
-app.post("/sessions/:id/logout", async (req, res) => {
+app.post("/sessions/:id/logout", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const session = getSessionOrError(id, res);
   if (!session) return;
@@ -1043,7 +1113,7 @@ app.post("/sessions/:id/logout", async (req, res) => {
   }
 });
 
-app.delete("/sessions/:id", async (req, res) => {
+app.delete("/sessions/:id", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const session = getSessionOrError(id, res);
   if (!session) return;
@@ -1070,14 +1140,18 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
 
-  // Initialize database
+  // Initialize database with schema validation/migration
+  const force = process.env.FORCE_DB_MIGRATION === 'true';
   try {
-    console.log('Initializing database...');
-    await initDatabase();
+    console.log('Initializing and validating database schema...');
+    if (force) {
+      console.log('FORCE_DB_MIGRATION is enabled: will drop extra columns if found.');
+    }
+    await initDatabase({ force, backup: false });
     await testConnection();
-    console.log('✓ Database initialized successfully');
+    console.log('✓ Database initialized and validated successfully');
   } catch (err) {
-    console.error('✗ Database initialization failed:', err);
+    console.error('✗ Database initialization/validation failed:', err);
     console.log('Server will continue but database features will not work');
   }
 
