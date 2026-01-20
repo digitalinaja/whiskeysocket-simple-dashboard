@@ -45,6 +45,8 @@ function navigateTo(viewId, sessionId = null) {
   // Load data on view switch
   if (viewId === 'jobs') {
     applyCurrentJobFilter();
+  } else if (viewId === 'sessions') {
+    updateSessionsListView();
   } else if (viewId === 'chat') {
     // Auto-select first session if none selected
     if (!chatState.currentSession) {

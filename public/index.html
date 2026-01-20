@@ -204,51 +204,23 @@
       </div>
 
       <!-- Create Session Card -->
-      <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-          <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">➕</div>
-          <div style="flex: 1;">
-            <h3 class="card-title" style="color: white; margin: 0;">Create New Session</h3>
-            <p style="color: rgba(255,255,255,0.8); font-size: 13px; margin: 4px 0 0 0;">Add a new WhatsApp session to your dashboard</p>
-          </div>
+      <div class="card">
+        <h3 class="card-title">➕ Create New Session</h3>
+        <div class="btn-group" style="margin-bottom: 16px;">
+          <input id="newSessionId" placeholder="Enter session ID (e.g., personal, work)" style="flex: 1; max-width: 300px;">
+          <button id="createSessionBtn">Create Session</button>
         </div>
-        <div class="btn-group" style="margin-bottom: 12px;">
-          <input id="newSessionId" placeholder="Enter session ID (e.g., personal, work, business)" style="flex: 1; max-width: 350px; background: rgba(255,255,255,0.95); border: none;">
-          <button id="createSessionBtn" style="background: white; color: #667eea; font-weight: 600;">Create Session</button>
-        </div>
-        <div class="log" id="sessionCreateLog" style="background: rgba(255,255,255,0.1); color: white; border-radius: 8px;"></div>
-      </div>
-
-      <!-- Stats Cards -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-        <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
-          <div class="stat-icon" style="color: white;">📱</div>
-          <div class="stat-content">
-            <div class="stat-label" style="color: rgba(255,255,255,0.8);">Total Sessions</div>
-            <div class="stat-value" id="stat-total-sessions-display">0</div>
-          </div>
-        </div>
-        <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
-          <div class="stat-icon" style="color: white;">✅</div>
-          <div class="stat-content">
-            <div class="stat-label" style="color: rgba(255,255,255,0.8);">Connected</div>
-            <div class="stat-value" id="stat-connected-display">0</div>
-          </div>
-        </div>
-        <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
-          <div class="stat-icon" style="color: white;">⚠️</div>
-          <div class="stat-content">
-            <div class="stat-label" style="color: rgba(255,255,255,0.8);">Disconnected</div>
-            <div class="stat-value" id="stat-disconnected-display">0</div>
-          </div>
-        </div>
+        <div class="log" id="sessionCreateLog"></div>
       </div>
 
       <!-- Sessions List -->
       <div class="card">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <h3 class="card-title" style="margin: 0;">📱 All Sessions</h3>
-          <button id="refreshSessionsBtn" class="btn-ghost" style="padding: 8px 16px;">🔄 Refresh</button>
+          <div style="display: flex; gap: 8px;">
+            <input id="sessionSearch" placeholder="Search sessions..." style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text);">
+            <button id="refreshSessionsBtn" class="btn-ghost" style="padding: 8px 16px;">🔄 Refresh</button>
+          </div>
         </div>
         <div id="sessions-list">Loading sessions...</div>
       </div>
