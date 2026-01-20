@@ -231,7 +231,7 @@ function initBroadcastCSV() {
 
   // Download template
   document.getElementById('downloadTemplate')?.addEventListener('click', () => {
-    const template = 'phone,name\n6281234567890,Budi Santoso\n6289876543210,Siti Wijaya\n6285555555555,Ahmad Rahman\n\n# Notes:\n# - Kolom "phone" WAJIB (format: country code + nomor)\n# - Kolom "name" OPSIONAL (untuk personalisasi pesan)\n# - Gunakan {name} dalam pesan untuk personalisasi';
+    const template = 'phone;name\n6281234567890;Budi Santoso\n6289876543210;Siti Wijaya\n6285555555555;Ahmad Rahman\n\n# Notes:\n# - Kolom "phone" WAJIB (format: country code + nomor)\n# - Kolom "name" OPSIONAL (untuk personalisasi pesan)\n# - Gunakan {name} dalam pesan untuk personalisasi';
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -294,7 +294,7 @@ function parseCSV(text) {
     return;
   }
 
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const headers = lines[0].split(';').map(h => h.trim().toLowerCase());
   const phoneIndex = headers.findIndex(h => h === 'phone' || h === 'nomor' || h === 'number' || h === 'whatsapp');
   const nameIndex = headers.findIndex(h => h === 'name' || h === 'nama');
 
@@ -305,7 +305,7 @@ function parseCSV(text) {
 
   csvBroadcastData = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim());
+    const values = lines[i].split(';').map(v => v.trim());
     const phone = values[phoneIndex]?.replace(/\D/g, '');
     const name = nameIndex !== -1 ? values[nameIndex] : '';
 
