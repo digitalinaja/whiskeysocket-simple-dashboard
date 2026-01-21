@@ -228,14 +228,15 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       console.log(`⚠️ @lid JID with no remoteJidAlt - using pushName "${pushName}" workaround`);
     }
 
-    // Extract content and media URL
+    // Extract media URL for different message types
+    const msgType = getMessageType(message);
+
     let messageContent = message.message?.conversation ||
                           message.message?.extendedTextMessage?.text ||
                           '[Media]';
     let mediaUrl = null;
-
-    // Extract media URL for different message types
-    const msgType = getMessageType(message);
+    let reactionEmoji = null;
+    let reactionTargetMessageId = null;
 
     // Handle protocolMessage (REVOKE - delete message)
     if (msgType === 'protocol') {
@@ -293,7 +294,13 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       return;
     }
 
-    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+    if (msgType === 'reaction') {
+      const reactionDetails = getReactionDetails(message);
+      reactionEmoji = reactionDetails.emoji;
+      reactionTargetMessageId = reactionDetails.targetMessageId;
+      messageContent = reactionEmoji ? `Reacted with ${reactionEmoji}` : 'Reacted';
+      console.log('✨ Reaction detected:', { emoji: reactionEmoji, targetMessageId: reactionTargetMessageId });
+    } else if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
       // For image messages
       if (message.message?.imageMessage) {
         const imgMsg = message.message.imageMessage;
@@ -358,14 +365,14 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     }
 
     await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
+      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, raw_message, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, reactionEmoji, reactionTargetMessageId, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
     );
 
     // Download and save media locally if it's a media message
     let localMediaPath = null;
-    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact' && msgType !== 'reaction') {
       try {
         localMediaPath = await saveMediaLocally(message, messageId, msgType);
         if (localMediaPath) {
@@ -397,6 +404,8 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
           type: msgType,
           mediaUrl: localMediaPath || mediaUrl,  // Use local path if available
           timestamp: timestamp.toISOString(),
+          reactionEmoji,
+          reactionTargetMessageId,
           status: isFromMe ? 'sent' : 'delivered'
         },
         contact: {
@@ -1157,11 +1166,18 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
                             message?.extendedTextMessage?.text ||
                             '[Media]';
       let mediaUrl = null;
+      let reactionEmoji = null;
+      let reactionTargetMessageId = null;
 
       const messageType = getMessageType({ message });
 
       // Extract media URL for different message types
-      if (messageType !== 'text' && messageType !== 'location' && messageType !== 'contact') {
+      if (messageType === 'reaction') {
+        const reactionDetails = getReactionDetails({ message });
+        reactionEmoji = reactionDetails.emoji;
+        reactionTargetMessageId = reactionDetails.targetMessageId;
+        messageContent = reactionEmoji ? `Reacted with ${reactionEmoji}` : 'Reacted';
+      } else if (messageType !== 'text' && messageType !== 'location' && messageType !== 'contact') {
         if (message?.imageMessage) {
           const imgMsg = message.imageMessage;
           messageContent = imgMsg.caption || '[Image]';
@@ -1189,8 +1205,8 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
 
       // Insert into database
       await connection.query(
-        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, raw_message, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           contactId,
@@ -1199,6 +1215,8 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
           messageType,
           messageContent,
           mediaUrl,
+          reactionEmoji,
+          reactionTargetMessageId,
           JSON.stringify(msgData),  // Store full msgData object (includes key, message, etc.)
           timestamp,
           isFromMe ? 'sent' : 'delivered'
@@ -1229,6 +1247,7 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
  * Get message type from Baileys message object
  */
 function getMessageType(message) {
+  if (message.message?.reactionMessage) return 'reaction';
   if (message.message?.imageMessage) return 'image';
   if (message.message?.videoMessage) return 'video';
   if (message.message?.audioMessage) return 'audio';
@@ -1237,6 +1256,17 @@ function getMessageType(message) {
   if (message.message?.contactMessage) return 'contact';
   if (message.message?.protocolMessage) return 'protocol';
   return 'text';
+}
+
+function getReactionDetails(message) {
+  const reactionMessage = message?.message?.reactionMessage || message?.reactionMessage;
+  if (!reactionMessage) {
+    return { emoji: null, targetMessageId: null };
+  }
+  return {
+    emoji: reactionMessage.text || null,
+    targetMessageId: reactionMessage.key?.id || null
+  };
 }
 
 /**
@@ -1365,13 +1395,15 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       }
     }
 
+    const msgType = getMessageType(message);
+
     // Extract message content
     let messageContent = message.message?.conversation ||
-                          message.message?.extendedTextMessage?.text ||
-                          '[Media]';
+                message.message?.extendedTextMessage?.text ||
+                '[Media]';
     let mediaUrl = null;
-
-    const msgType = getMessageType(message);
+    let reactionEmoji = null;
+    let reactionTargetMessageId = null;
 
     // Handle protocolMessage (REVOKE - delete message)
     if (msgType === 'protocol') {
@@ -1401,8 +1433,13 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       return;
     }
 
-    // Extract media for non-text messages
-    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+    if (msgType === 'reaction') {
+      const reactionDetails = getReactionDetails(message);
+      reactionEmoji = reactionDetails.emoji;
+      reactionTargetMessageId = reactionDetails.targetMessageId;
+      messageContent = reactionEmoji ? `Reacted with ${reactionEmoji}` : 'Reacted';
+      console.log('✨ Group reaction detected:', { emoji: reactionEmoji, targetMessageId: reactionTargetMessageId });
+    } else if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
       if (message.message?.imageMessage) {
         const imgMsg = message.message.imageMessage;
         messageContent = imgMsg.caption || '[Image]';
@@ -1443,8 +1480,9 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       const [result] = await connection.query(
         `INSERT INTO messages (
           session_id, contact_id, message_id, direction, message_type, content, media_url,
+          reaction_emoji, reaction_target_message_id,
           raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           null, // contact_id is NULL for group messages (not linked to individual contact)
@@ -1453,6 +1491,8 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
           msgType,
           messageContent,
           mediaUrl,
+          reactionEmoji,
+          reactionTargetMessageId,
           JSON.stringify(message),
           timestamp,
           fromMe ? 'sent' : 'delivered',
@@ -1480,7 +1520,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
     }
 
     // Download and save media locally if it's a media message (same as private chat)
-    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact') {
+    if (msgType !== 'text' && msgType !== 'location' && msgType !== 'contact' && msgType !== 'reaction') {
       try {
         console.log(`💾 Saving media locally for group message: ${msgType}`);
         const localMediaPath = await saveMediaLocally(message, messageId, msgType);
@@ -1531,6 +1571,8 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
           type: msgType,
           mediaUrl: mediaUrl,
           timestamp: timestamp.toISOString(),
+          reactionEmoji,
+          reactionTargetMessageId,
           status: fromMe ? 'sent' : 'delivered',
           senderName: participantName,
           senderJid: participantJid

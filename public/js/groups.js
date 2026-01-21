@@ -6,6 +6,8 @@ const Groups = {
   selectedGroup: null,
   groups: [],
   selectedMedia: null,
+  currentMessages: [],
+  reactionMap: {},
 
   // Initialize Groups module
   init() {
@@ -327,7 +329,8 @@ const Groups = {
       const data = await response.json();
 
       if (data.messages) {
-        this.renderMessages(data.messages);
+        this.currentMessages = this.annotateMessagesWithReactions(data.messages);
+        this.renderMessages(this.currentMessages);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -399,6 +402,22 @@ const Groups = {
     const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
     const colorIndex = senderName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
     const avatarColor = colors[colorIndex];
+    const avatarHtml = `
+      <div class="message-sender">
+        <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+      </div>
+    `;
+    const time = this.formatTime(message.timestamp);
+    const reactionsHtml = (message.reactions || []).length ? `
+      <div class="message-reactions">
+        ${(message.reactions || []).map(reaction => `
+          <span class="reaction-chip">
+            <span class="reaction-chip-emoji">${this.escapeHtml(reaction.emoji)}</span>
+            ${reaction.count > 1 ? `<span class="reaction-chip-count">${reaction.count}</span>` : ''}
+          </span>
+        `).join('')}
+      </div>
+    ` : '';
 
     let mediaHtml = '';
     if (message.mediaUrl) {
@@ -427,7 +446,6 @@ const Groups = {
       }
     }
 
-    const time = this.formatTime(message.timestamp);
 
     // Compact message (no avatar) for consecutive messages
     if (!showSender) {
@@ -465,12 +483,13 @@ const Groups = {
 
         <div class="message-content-wrapper">
           ${mediaHtml}
-          ${message.content || senderNameHtml ? `
+          ${message.content || senderNameHtml || reactionsHtml ? `
             <div class="message-bubble">
               ${senderNameHtml}
               ${message.content ? `
                 <div class="bubble-content">${this.escapeHtml(message.content)}</div>
               ` : ''}
+              ${reactionsHtml}
             </div>
           ` : ''}
           ${showTime ? `
@@ -487,6 +506,69 @@ const Groups = {
         ` : ''}
       </div>
     `;
+  },
+
+  buildReactionSummary(reactions = []) {
+    const counts = {};
+    reactions.forEach((reaction) => {
+      const emoji = reaction.emoji || '❤️';
+      counts[emoji] = (counts[emoji] || 0) + 1;
+    });
+    return Object.entries(counts).map(([emoji, count]) => ({ emoji, count }));
+  },
+
+  annotateMessagesWithReactions(messages) {
+    const reactionMap = {};
+    const visibleMessages = [];
+
+    (messages || []).forEach((msg) => {
+      if (msg.type === 'reaction' && msg.reactionTargetMessageId) {
+        const targetId = msg.reactionTargetMessageId;
+        reactionMap[targetId] = reactionMap[targetId] || [];
+        reactionMap[targetId].push({
+          emoji: msg.reactionEmoji || msg.content || '❤️',
+          senderName: msg.senderName,
+          timestamp: msg.timestamp
+        });
+      } else {
+        visibleMessages.push({ ...msg });
+      }
+    });
+
+    visibleMessages.forEach((msg) => {
+      msg.reactions = this.buildReactionSummary(reactionMap[msg.messageId]);
+    });
+
+    this.reactionMap = reactionMap;
+    return visibleMessages;
+  },
+
+  addIncomingReaction(message) {
+    if (!message || !message.reactionTargetMessageId) {
+      return;
+    }
+
+    this.currentMessages = this.currentMessages || [];
+
+    const targetId = message.reactionTargetMessageId;
+    const emoji = message.reactionEmoji || message.content || '❤️';
+    const entry = {
+      emoji,
+      senderName: message.senderName,
+      timestamp: message.timestamp
+    };
+
+    this.reactionMap[targetId] = this.reactionMap[targetId] || [];
+    this.reactionMap[targetId].push(entry);
+
+    const targetMessage = this.currentMessages.find(m => m.messageId === targetId);
+    if (targetMessage) {
+      targetMessage.reactions = this.buildReactionSummary(this.reactionMap[targetId]);
+      this.renderMessages(this.currentMessages);
+      this.scrollToBottom();
+    } else if (this.selectedGroup) {
+      this.loadGroupMessages(this.selectedGroup.id);
+    }
   },
 
   // Send message to group
@@ -959,12 +1041,15 @@ const Groups = {
 
     // If viewing this group, add message
     if (this.selectedGroup && data.groupId === this.selectedGroup.id) {
-      const container = document.getElementById('groupMessagesContainer');
-      if (container) {
-        const msgHtml = this.renderMessage(data.message);
-        container.insertAdjacentHTML('beforeend', msgHtml);
-        this.scrollToBottom();
+      if (data.message.type === 'reaction') {
+        this.addIncomingReaction(data.message);
+        return;
       }
+
+      this.currentMessages = this.currentMessages || [];
+      this.currentMessages.push({ ...data.message, reactions: [] });
+      this.renderMessages(this.currentMessages);
+      this.scrollToBottom();
     }
   },
 

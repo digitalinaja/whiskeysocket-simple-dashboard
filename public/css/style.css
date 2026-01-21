@@ -870,6 +870,22 @@
     @apply bg-cyan-500/90 text-slate-950 rounded-xl rounded-tr-sm px-3 py-2 inline-flex flex-col;
   }
 
+  .message-reactions {
+    @apply mt-2 flex flex-wrap gap-2;
+  }
+
+  .reaction-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200;
+  }
+
+  .reaction-chip-emoji {
+    @apply text-sm;
+  }
+
+  .reaction-chip-count {
+    @apply text-[10px] text-slate-400;
+  }
+
   /* Sender name inside bubble */
   .bubble-sender-name {
     @apply text-xs font-bold mb-1 pb-1 border-b border-white/10;

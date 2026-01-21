@@ -146,7 +146,7 @@ async function syncGroupParticipants(groupId, participants, sessionId = null) {
         // For LID participants without name, skip contact creation temporarily
         // They will be created/updated when we receive actual messages with participantAlt
         if (whatsappLid && !name) {
-          console.log(`⏭️ Skipping contact creation for LID participant without name: ${jid}`);
+          // console.log(`⏭️ Skipping contact creation for LID participant without name: ${jid}`);
         } else {
           const contact = await getOrCreateContact(
             actualSessionId,
@@ -523,6 +523,8 @@ async function getGroupMessages(sessionId, groupId, limit = 50) {
         message_type,
         content,
         media_url,
+        reaction_emoji,
+        reaction_target_message_id,
         timestamp,
         status,
         is_deleted,
@@ -544,6 +546,8 @@ async function getGroupMessages(sessionId, groupId, limit = 50) {
       type: m.message_type,
       content: m.content,
       mediaUrl: m.media_url,
+      reactionEmoji: m.reaction_emoji,
+      reactionTargetMessageId: m.reaction_target_message_id,
       timestamp: m.timestamp,
       status: m.status,
       isDeleted: m.is_deleted,
