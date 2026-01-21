@@ -581,10 +581,19 @@
     @apply border-slate-200;
   }
   :root[data-theme='light'] .message.incoming .message-bubble {
-    @apply bg-slate-100 text-slate-900;
+    @apply bg-slate-900 text-slate-100;
   }
   :root[data-theme='light'] .message.outgoing .message-bubble {
     @apply bg-cyan-300 text-slate-900;
+  }
+
+  /* Ensure message bubble text contrast in light mode (explicit overrides) */
+  :root[data-theme='light'] .message-bubble {
+    color: rgb(199, 216, 253); /* text-slate-900 fallback */
+  }
+
+  :root[data-theme='light'] .message.outgoing .message-bubble {
+    color: rgb(17 24 39) !important;
   }
   :root[data-theme='light'] .job-item,
   :root[data-theme='light'] .job-stat {
