@@ -78,6 +78,14 @@ app.get('/api/auth/check', checkAuthStatus, (req, res) => {
   });
 });
 
+// App configuration endpoint (public)
+app.get('/api/config', (req, res) => {
+  res.json({
+    appName: process.env.APP_NAME || 'Webaloka CRM',
+    appVersion: '1.0.0'
+  });
+});
+
 // ============================================
 // TEST LOGIN ENDPOINT (HANYA UNTUK TESTING!)
 // ============================================

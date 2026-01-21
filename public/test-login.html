@@ -3,7 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Alhikmah CRM</title>
+  <title>Loading...</title>
+  <script>
+    // Load app configuration from server
+    document.title = 'Loading...';
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(config => {
+        document.title = `Login - ${config.appName}`;
+        // Store config globally for other scripts to use
+        window.appConfig = config;
+      })
+      .catch(err => {
+        console.error('Failed to load app config:', err);
+        document.title = 'Login - CRM Dashboard - Webaloka';
+      });
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * {
@@ -191,7 +206,7 @@
   <div class="login-container">
     <div class="logo">
       <div class="logo-icon">W</div>
-      <h1>Alhikmah CRM</h1>
+      <h1 id="appBrandName">&nbsp;</h1>
       <p class="subtitle">WhatsApp Dashboard & CRM System</p>
     </div>
 
@@ -303,6 +318,17 @@
 
     // Check if already logged in on page load
     window.addEventListener('load', async () => {
+      // Update app name in the DOM from config
+      if (window.appConfig && window.appConfig.appName) {
+        const brandName = window.appConfig.appName;
+        
+        // Update login page logo
+        const logoHeading = document.getElementById('appBrandName');
+        if (logoHeading) {
+          logoHeading.textContent = brandName;
+        }
+      }
+      
       try {
         const response = await fetch('/api/auth/check');
         const data = await response.json();

@@ -3,7 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Alhikmah CRM Dashboard - Webaloka by Baileys 7.x.x</title>
+  <title>Loading...</title>
+  <script>
+    // Load app configuration from server
+    document.title = 'Loading...';
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(config => {
+        document.title = `${config.appName} Dashboard - Webaloka`;
+        // Store config globally for other scripts to use
+        window.appConfig = config;
+      })
+      .catch(err => {
+        console.error('Failed to load app config:', err);
+        document.title = 'CRM Dashboard - Webaloka';
+      });
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -852,6 +867,21 @@
 
   <script>
     const socket = io();
+    
+    // Update app name in the DOM once the config is loaded
+    const updateAppName = setInterval(() => {
+      if (window.appConfig && window.appConfig.appName) {
+        const brandName = window.appConfig.appName;
+        
+        // Update sidebar header
+        const sidebarHeader = document.querySelector('.sidebar-header h1');
+        if (sidebarHeader) {
+          sidebarHeader.innerHTML = `<div class="logo-icon">W</div>${brandName}`;
+        }
+        
+        clearInterval(updateAppName);
+      }
+    }, 100);
   </script>
 </body>
 </html>
