@@ -31,6 +31,26 @@ async function initApp() {
     // Initialize CRM
     initCRM();
 
+    // Initialize Activities
+    if (typeof initActivities === 'function') {
+      initActivities();
+    }
+
+    // Initialize Analytics
+    if (typeof initAnalytics === 'function') {
+      initAnalytics();
+    }
+
+    // Initialize Prospects
+    if (typeof initProspects === 'function') {
+      initProspects();
+    }
+
+    // Initialize External Apps
+    if (typeof initExternalApps === 'function') {
+      initExternalApps();
+    }
+
     // Setup job detail handlers
     setupJobDetailHandlers();
 

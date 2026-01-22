@@ -2,7 +2,7 @@
 // Declarative schema definition for all tables, columns, indexes, and constraints
 // Used for validation and migration
 
-export const SCHEMA_VERSION = '1.0.0';
+export const SCHEMA_VERSION = '1.2.0';
 
 export const SCHEMA_DEFINITIONS = {
   contacts: {
@@ -20,6 +20,12 @@ export const SCHEMA_DEFINITIONS = {
       is_group: 'BOOLEAN DEFAULT FALSE',
       group_subject: 'VARCHAR(255) NULL',
       source: "ENUM('whatsapp','google','both') DEFAULT 'whatsapp'",
+      contact_type: "ENUM('student_parent','prospect_parent','alumni_parent','external') DEFAULT 'external'",
+      external_student_ids: 'JSON NULL COMMENT "Array of student IDs from external systems"',
+      external_student_source: 'VARCHAR(100) NULL COMMENT "Source system: student_db_app, etc."',
+      payment_app_link: 'VARCHAR(500) NULL COMMENT "Link to payment app record"',
+      ticketing_app_link: 'VARCHAR(500) NULL COMMENT "Link to ticketing app record"',
+      linked_group_ids: 'JSON NULL COMMENT "Array of linked WhatsApp group IDs"',
       google_contact_id: 'VARCHAR(255) NULL',
       lead_status_id: 'INT NULL',
       created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
@@ -34,6 +40,9 @@ export const SCHEMA_DEFINITIONS = {
       { name: 'idx_last_interaction', columns: ['last_interaction_at'] },
       { name: 'idx_google_contact', columns: ['google_contact_id'] },
       { name: 'idx_is_group', columns: ['is_group'] },
+      { name: 'idx_contact_type', columns: ['contact_type'] },
+      { name: 'idx_contact_type_session', columns: ['session_id', 'contact_type'] },
+      { name: 'idx_external_student_source', columns: ['external_student_source'] },
     ],
     // No foreign keys
   },
@@ -106,12 +115,15 @@ export const SCHEMA_DEFINITIONS = {
       name: 'VARCHAR(50) NOT NULL',
       order_index: 'INT DEFAULT 0',
       color: "VARCHAR(7) DEFAULT '#94a3b8'",
+      category: "ENUM('enrollment','general','custom') DEFAULT 'general'",
       is_default: 'BOOLEAN DEFAULT FALSE',
       created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
     },
     indexes: [
       { name: 'unique_status_per_session', columns: ['session_id', 'name'], unique: true },
       { name: 'idx_session', columns: ['session_id'] },
+      { name: 'idx_category', columns: ['category'] },
+      { name: 'idx_session_category', columns: ['session_id', 'category'] },
     ],
   },
   notes: {
@@ -207,6 +219,74 @@ export const SCHEMA_DEFINITIONS = {
     indexes: [
       { name: 'idx_version', columns: ['version'] },
       { name: 'idx_status', columns: ['status'] },
+    ],
+  },
+  activity_types: {
+    columns: {
+      id: 'INT AUTO_INCREMENT PRIMARY KEY',
+      session_id: 'VARCHAR(255) NOT NULL',
+      name: 'VARCHAR(50) NOT NULL',
+      icon: 'VARCHAR(50) NULL',
+      color: "VARCHAR(7) DEFAULT '#6366f1'",
+      created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    },
+    indexes: [
+      { name: 'unique_activity_type_per_session', columns: ['session_id', 'name'], unique: true },
+      { name: 'idx_session', columns: ['session_id'] },
+    ],
+  },
+  activities: {
+    columns: {
+      id: 'INT AUTO_INCREMENT PRIMARY KEY',
+      session_id: 'VARCHAR(255) NOT NULL',
+      contact_id: 'INT NOT NULL',
+      activity_type_id: 'INT NOT NULL',
+      title: 'VARCHAR(255) NOT NULL',
+      description: 'TEXT NULL',
+      activity_date: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      created_by: 'VARCHAR(255) NULL',
+      outcome: 'TEXT NULL',
+      next_action: 'TEXT NULL',
+      next_action_date: 'DATE NULL',
+      created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      updated_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+    },
+    indexes: [
+      { name: 'idx_contact', columns: ['contact_id'] },
+      { name: 'idx_session', columns: ['session_id'] },
+      { name: 'idx_activity_date', columns: ['activity_date'] },
+      { name: 'idx_activity_type', columns: ['activity_type_id'] },
+      { name: 'idx_contact_activity_date', columns: ['contact_id', 'activity_date'] },
+      { name: 'idx_session_activity_date', columns: ['session_id', 'activity_date'] },
+      { name: 'idx_activity_type_date', columns: ['activity_type_id', 'activity_date'] },
+    ],
+    foreignKeys: [
+      { column: 'contact_id', refTable: 'contacts', refColumn: 'id', onDelete: 'CASCADE' },
+      { column: 'activity_type_id', refTable: 'activity_types', refColumn: 'id', onDelete: 'RESTRICT' },
+    ],
+  },
+  status_change_history: {
+    columns: {
+      id: 'INT AUTO_INCREMENT PRIMARY KEY',
+      session_id: 'VARCHAR(255) NOT NULL',
+      contact_id: 'INT NOT NULL',
+      old_status_id: 'INT NULL',
+      new_status_id: 'INT NOT NULL',
+      changed_by: 'VARCHAR(255) NULL',
+      change_reason: 'TEXT NULL',
+      changed_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    },
+    indexes: [
+      { name: 'idx_contact', columns: ['contact_id'] },
+      { name: 'idx_session', columns: ['session_id'] },
+      { name: 'idx_changed_at', columns: ['changed_at'] },
+      { name: 'idx_status_change_contact', columns: ['contact_id', 'changed_at'] },
+      { name: 'idx_status_change_date', columns: ['new_status_id', 'changed_at'] },
+    ],
+    foreignKeys: [
+      { column: 'contact_id', refTable: 'contacts', refColumn: 'id', onDelete: 'CASCADE' },
+      { column: 'old_status_id', refTable: 'lead_statuses', refColumn: 'id', onDelete: 'SET NULL' },
+      { column: 'new_status_id', refTable: 'lead_statuses', refColumn: 'id', onDelete: 'RESTRICT' },
     ],
   },
 };

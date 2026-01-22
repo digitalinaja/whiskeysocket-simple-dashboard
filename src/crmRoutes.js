@@ -83,7 +83,7 @@ const handleMediaUpload = (req, res, next) => {
  */
 router.get('/contacts', async (req, res) => {
   try {
-    const { sessionId, search, limit = 50, page = 1, statusId, tagId, tagIds } = req.query;
+    const { sessionId, search, limit = 50, page = 1, statusId, tagId, tagIds, contactType } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
@@ -122,6 +122,11 @@ router.get('/contacts', async (req, res) => {
     if (statusId) {
       whereClause += ` AND c.lead_status_id = ?`;
       params.push(statusId);
+    }
+
+    if (contactType) {
+      whereClause += ` AND c.contact_type = ?`;
+      params.push(contactType);
     }
 
     const tagFilterValues = [];
@@ -183,6 +188,12 @@ router.get('/contacts', async (req, res) => {
         profilePicUrl: c.profile_pic_url,
         source: c.source,
         googleContactId: c.google_contact_id,
+        contactType: c.contact_type,
+        externalStudentIds: c.external_student_ids,
+        externalStudentSource: c.external_student_source,
+        paymentAppLink: c.payment_app_link,
+        ticketingAppLink: c.ticketing_app_link,
+        linkedGroupIds: c.linked_group_ids,
         leadStatus: c.lead_status_id ? {
           id: c.lead_status_id,
           name: c.lead_status_name,
@@ -275,6 +286,12 @@ router.get('/contacts/:contactId', async (req, res) => {
         profilePicUrl: contact.profile_pic_url,
         source: contact.source,
         googleContactId: contact.google_contact_id,
+        contactType: contact.contact_type,
+        externalStudentIds: contact.external_student_ids,
+        externalStudentSource: contact.external_student_source,
+        paymentAppLink: contact.payment_app_link,
+        ticketingAppLink: contact.ticketing_app_link,
+        linkedGroupIds: contact.linked_group_ids,
         leadStatus: contact.lead_status_id ? {
           id: contact.lead_status_id,
           name: contact.lead_status_name,

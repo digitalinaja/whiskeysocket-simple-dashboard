@@ -222,9 +222,45 @@ async function createDefaultLeadStatuses(sessionId) {
   }
 }
 
+/**
+ * Create default activity types for a session
+ */
+async function createDefaultActivityTypes(sessionId) {
+  const connection = await getPool().getConnection();
+
+  try {
+    const defaultActivityTypes = [
+      { name: 'Phone Call', icon: '📞', color: '#3b82f6' },
+      { name: 'WhatsApp Message', icon: '💬', color: '#22c55e' },
+      { name: 'Email', icon: '📧', color: '#06b6d4' },
+      { name: 'School Visit', icon: '🏫', color: '#f59e0b' },
+      { name: 'Meeting', icon: '👥', color: '#8b5cf6' },
+      { name: 'Note', icon: '📝', color: '#6b7280' },
+      { name: 'Assessment', icon: '📋', color: '#ec4899' },
+      { name: 'Follow-up', icon: '🔜', color: '#14b8a6' }
+    ];
+
+    for (const type of defaultActivityTypes) {
+      await connection.query(
+        `INSERT IGNORE INTO activity_types (session_id, name, icon, color)
+         VALUES (?, ?, ?, ?)`,
+        [sessionId, type.name, type.icon, type.color]
+      );
+    }
+
+    console.log(`✓ Default activity types created for session: ${sessionId}`);
+  } catch (error) {
+    console.error('Error creating default activity types:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 export {
   getPool,
   initDatabase,
   testConnection,
-  createDefaultLeadStatuses
+  createDefaultLeadStatuses,
+  createDefaultActivityTypes
 };
