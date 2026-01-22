@@ -315,7 +315,7 @@ function initSessions() {
   });
 
   // Logout session handler
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
+  document.getElementById('logoutSessionBtn').addEventListener('click', async () => {
     const log = document.getElementById('sessionActionLog');
     try {
       await postJson(`/sessions/${state.activeSession}/logout`, {});

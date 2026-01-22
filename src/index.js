@@ -1108,7 +1108,14 @@ app.post("/sessions/:id/logout", authenticateToken, async (req, res) => {
   if (!session) return;
   try {
     if (session.sock) {
-      await session.sock.logout();
+      try {
+        await session.sock.logout();
+      } catch (logoutErr) {
+        // "Intentional Logout" error from Baileys is expected and can be ignored
+        if (!logoutErr.message.includes('Intentional Logout')) {
+          console.error("Unexpected error during logout:", logoutErr);
+        }
+      }
     }
     resetAuthDir(id);
     // restart session to force new QR
