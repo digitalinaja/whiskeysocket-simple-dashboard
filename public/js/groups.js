@@ -8,6 +8,10 @@ const Groups = {
   selectedMedia: null,
   currentMessages: [],
   reactionMap: {},
+  messagesOffset: 0,
+  messagesLimit: 50,
+  hasMoreMessages: true,
+  isLoadingMore: false,
 
   // Initialize Groups module
   init() {
@@ -141,6 +145,18 @@ const Groups = {
       });
     }
 
+    // Scroll to load more messages
+    const groupMessagesContainer = document.getElementById('groupMessagesContainer');
+    if (groupMessagesContainer) {
+      groupMessagesContainer.addEventListener('scroll', (e) => {
+        const container = e.target;
+        // Load more when scrolled to top (within 100px)
+        if (container.scrollTop < 100 && this.hasMoreMessages && !this.isLoadingMore) {
+          this.loadMoreMessages();
+        }
+      });
+    }
+
     // Category badge buttons - event delegation
     const groupsList = document.getElementById('groupsList');
     if (groupsList) {
@@ -163,6 +179,12 @@ const Groups = {
     socket.on('chat.newGroupMessage', (data) => {
       console.log('New group message received:', data);
       this.handleNewMessage(data);
+    });
+
+    // Listen for group message deletion
+    socket.on('chat.groupMessageDeleted', (data) => {
+      console.log('Group message deleted:', data);
+      this.handleMessageDeleted(data);
     });
 
     // Listen for group updates
@@ -317,76 +339,194 @@ const Groups = {
     this.loadGroupMessages(groupId);
   },
 
-  // Load group messages
-  async loadGroupMessages(groupId) {
+  // Load more messages (pagination)
+  async loadMoreMessages() {
+    if (this.isLoadingMore || !this.hasMoreMessages || !this.selectedGroup) {
+      return;
+    }
+
+    this.isLoadingMore = true;
+    this.showLoadingIndicator();
+
+    try {
+      await this.loadGroupMessages(this.selectedGroup.id, true);
+    } finally {
+      this.isLoadingMore = false;
+      this.hideLoadingIndicator();
+    }
+  },
+
+  // Show loading indicator at top
+  showLoadingIndicator() {
     const container = document.getElementById('groupMessagesContainer');
     if (!container) return;
 
-    container.innerHTML = '<div class="loading-groups">Loading messages...</div>';
+    const existing = document.getElementById('loadMoreIndicator');
+    if (existing) return;
+
+    const indicator = document.createElement('div');
+    indicator.id = 'loadMoreIndicator';
+    indicator.style.cssText = `
+      padding: 12px;
+      text-align: center;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 13px;
+    `;
+    indicator.innerHTML = '<span class="loading-dots">⏳ Loading older messages...</span>';
+    container.insertBefore(indicator, container.firstChild);
+  },
+
+  // Hide loading indicator
+  hideLoadingIndicator() {
+    const indicator = document.getElementById('loadMoreIndicator');
+    if (indicator) {
+      indicator.remove();
+    }
+  },
+
+  // Load group messages
+  async loadGroupMessages(groupId, append = false) {
+    const container = document.getElementById('groupMessagesContainer');
+    if (!container) return;
+
+    // Save current scroll height if appending
+    const oldScrollHeight = append ? container.scrollHeight : 0;
+    const oldScrollTop = append ? container.scrollTop : 0;
+
+    if (!append) {
+      container.innerHTML = '<div class="loading-groups">Loading messages...</div>';
+      this.messagesOffset = 0;
+    }
 
     try {
-      const response = await fetch(`/api/groups/${groupId}/messages?sessionId=${this.currentSession}&limit=50`);
+      console.log(`📥 Loading messages for group ${groupId} with offset ${this.messagesOffset}`);
+      const response = await fetch(`/api/groups/${groupId}/messages?sessionId=${this.currentSession}&limit=${this.messagesLimit}&offset=${this.messagesOffset}`);
       const data = await response.json();
 
+      console.log(`✓ API response received:`, {
+        messageCount: data.messages ? data.messages.length : 0,
+        pagination: data.pagination
+      });
+
       if (data.messages) {
-        this.currentMessages = this.annotateMessagesWithReactions(data.messages);
+        console.log(`📝 Processing ${data.messages.length} messages...`);
+
+        // Reverse to show oldest first (API returns newest first with DESC)
+        const reversedMessages = [...data.messages].reverse();
+
+        if (append) {
+          // Prepend older messages to existing ones
+          const annotatedMessages = this.annotateMessagesWithReactions(reversedMessages);
+          this.currentMessages = [...annotatedMessages, ...this.currentMessages];
+        } else {
+          // First load - replace all messages
+          this.currentMessages = this.annotateMessagesWithReactions(reversedMessages);
+        }
+
+        // Update pagination state
+        if (data.pagination) {
+          this.hasMoreMessages = data.pagination.hasMore;
+          this.messagesOffset = data.pagination.offset + data.messages.length;
+        }
+
+        console.log(`✓ After annotation: ${this.currentMessages.length} visible messages`);
         this.renderMessages(this.currentMessages);
+
+        // Restore scroll position when loading more
+        if (append) {
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+        }
+      } else {
+        console.warn('⚠️ No messages in response');
+        if (!append) {
+          container.innerHTML = '<div class="empty-state">No messages</div>';
+        }
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
-      container.innerHTML = '<div class="empty-state">Failed to load messages</div>';
+      if (!append) {
+        container.innerHTML = '<div class="empty-state">Failed to load messages</div>';
+      }
     }
   },
 
   // Render group messages
   renderMessages(messages) {
-    const container = document.getElementById('groupMessagesContainer');
-    if (!container) return;
+    try {
+      const container = document.getElementById('groupMessagesContainer');
+      if (!container) return;
 
-    if (messages.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <p>No messages in this group yet</p>
-        </div>
-      `;
-      return;
-    }
-
-    // Group consecutive messages from same sender
-    const groupedMessages = [];
-    let lastSender = null;
-    let lastDirection = null;
-
-    messages.forEach(msg => {
-      const sender = msg.senderName || (msg.direction === 'incoming' ? 'Someone' : 'You');
-      const direction = msg.direction;
-
-      if (lastSender === sender && lastDirection === direction) {
-        // Same sender, add to last group
-        groupedMessages[groupedMessages.length - 1].push(msg);
-      } else {
-        // New sender or direction, create new group
-        groupedMessages.push([msg]);
-        lastSender = sender;
-        lastDirection = direction;
-      }
-    });
-
-    container.innerHTML = groupedMessages.map(group => {
-      const firstMsg = group[0];
-      const isIncoming = firstMsg.direction === 'incoming';
-
-      // If multiple consecutive messages from same sender, show compact view
-      if (group.length > 1) {
-        return `
-          <div class="message-group ${isIncoming ? 'incoming' : 'outgoing'}">
-            ${group.map((msg, idx) => this.renderMessage(msg, idx === 0, idx === group.length - 1)).join('')}
+      if (messages.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <p>No messages in this group yet</p>
           </div>
         `;
-      } else {
-        return this.renderMessage(firstMsg, true, true);
+        return;
       }
-    }).join('');
+
+      // Group consecutive messages from same sender
+      const groupedMessages = [];
+      let lastSender = null;
+      let lastDirection = null;
+
+      messages.forEach(msg => {
+        const sender = msg.senderName || (msg.direction === 'incoming' ? 'Someone' : 'You');
+        const direction = msg.direction;
+
+        if (lastSender === sender && lastDirection === direction) {
+          // Same sender, add to last group
+          groupedMessages[groupedMessages.length - 1].push(msg);
+        } else {
+          // New sender or direction, create new group
+          groupedMessages.push([msg]);
+          lastSender = sender;
+          lastDirection = direction;
+        }
+      });
+
+      const renderedGroups = groupedMessages.map(group => {
+        try {
+          const firstMsg = group[0];
+          const isIncoming = firstMsg.direction === 'incoming';
+
+          // If multiple consecutive messages from same sender, show compact view
+          if (group.length > 1) {
+            const renderedMessages = group.map((msg, idx) => {
+              try {
+                return this.renderMessage(msg, idx === 0, idx === group.length - 1);
+              } catch (error) {
+                console.error('Error rendering individual message:', error, msg);
+                return `<div class="message error-message">Failed to render message</div>`;
+              }
+            }).join('');
+
+            return `
+              <div class="message-group ${isIncoming ? 'incoming' : 'outgoing'}">
+                ${renderedMessages}
+              </div>
+            `;
+          } else {
+            return this.renderMessage(firstMsg, true, true);
+          }
+        } catch (error) {
+          console.error('Error rendering message group:', error, group);
+          return `<div class="message error-message">Failed to render message group</div>`;
+        }
+      }).join('');
+
+      container.innerHTML = renderedGroups;
+    } catch (error) {
+      console.error('Error rendering messages:', error);
+      const container = document.getElementById('groupMessagesContainer');
+      if (container) {
+        container.innerHTML = `<div class="error-state"><p>Failed to render messages. Check console for details.</p></div>`;
+      }
+    }
+
 
     // Scroll to bottom
     this.scrollToBottom();
@@ -394,68 +534,107 @@ const Groups = {
 
   // Render single message
   renderMessage(message, showSender = true, showTime = true) {
-    const isIncoming = message.direction === 'incoming';
-    const senderName = message.senderName || (isIncoming ? 'Someone' : 'You');
-    const senderInitial = senderName.charAt(0).toUpperCase();
+    try {
+      const isIncoming = message.direction === 'incoming';
+      const senderName = message.senderName || (isIncoming ? 'Someone' : 'You');
+      const senderInitial = senderName.charAt(0).toUpperCase();
 
-    // Get avatar color based on sender name
-    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
-    const colorIndex = senderName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
-    const avatarColor = colors[colorIndex];
-    const avatarHtml = `
-      <div class="message-sender">
-        <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
-      </div>
-    `;
-    const time = this.formatTime(message.timestamp);
-    const reactionsHtml = (message.reactions || []).length ? `
-      <div class="message-reactions">
-        ${(message.reactions || []).map(reaction => `
-          <span class="reaction-chip">
-            <span class="reaction-chip-emoji">${this.escapeHtml(reaction.emoji)}</span>
-            ${reaction.count > 1 ? `<span class="reaction-chip-count">${reaction.count}</span>` : ''}
-          </span>
-        `).join('')}
-      </div>
-    ` : '';
-
-    let mediaHtml = '';
-    if (message.mediaUrl) {
-      const isImage = message.type === 'image';
-      const isVideo = message.type === 'video';
-
-      // Determine media source - use API proxy if full URL
-      const mediaSrc = message.mediaUrl.startsWith('http')
-        ? `/api/messages/${message.id}/media?sessionId=${this.currentSession}`
-        : `/media/${message.mediaUrl}`;
-
-      if (isImage) {
-        mediaHtml = `<div class="message-media">
-          <img class="message-media-image" src="${mediaSrc}" alt="${this.escapeHtml(message.content)}"
-               onclick="window.open(this.src, '_blank')"
-               onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
-        </div>`;
-      } else if (isVideo) {
-        mediaHtml = `<div class="message-media">
-          <video class="message-media-video" controls preload="metadata"
-                 onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load video</span>'">
-            <source src="${mediaSrc}" type="video/mp4">
-            Your browser does not support the video tag.
-          </video>
-        </div>`;
+      // Get avatar color based on sender name
+      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
+      const colorIndex = senderName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+      const avatarColor = colors[colorIndex];
+      const avatarHtml = `
+        <div class="message-sender">
+          <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+        </div>
+      `;
+      const time = this.formatTime(message.timestamp);
+      
+      // Build reactions HTML safely
+      let reactionsHtml = '';
+      if (message.reactions && message.reactions.length > 0) {
+        const reactionElements = message.reactions.map(reaction => {
+          const safeEmoji = this.escapeHtml(reaction.emoji);
+          const countHtml = reaction.count > 1 ? `<span class="reaction-chip-count">${reaction.count}</span>` : '';
+          return `<span class="reaction-chip"><span class="reaction-chip-emoji">${safeEmoji}</span>${countHtml}</span>`;
+        }).join('');
+        reactionsHtml = `<div class="message-reactions">${reactionElements}</div>`;
       }
-    }
 
+      let mediaHtml = '';
+      if (message.mediaUrl) {
+        const isImage = message.type === 'image';
+        const isVideo = message.type === 'video';
 
-    // Compact message (no avatar) for consecutive messages
-    if (!showSender) {
-      return `
-        <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact">
+        // Determine media source - use API proxy if full URL
+        const mediaSrc = message.mediaUrl.startsWith('http')
+          ? `/api/messages/${message.id}/media?sessionId=${this.currentSession}`
+          : `/media/${message.mediaUrl}`;
+
+        if (isImage) {
+          mediaHtml = `<div class="message-media">
+            <img class="message-media-image" src="${mediaSrc}" alt="${this.escapeHtml(message.content)}"
+                 onclick="window.open(this.src, '_blank')"
+                 onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
+          </div>`;
+        } else if (isVideo) {
+          mediaHtml = `<div class="message-media">
+            <video class="message-media-video" controls preload="metadata"
+                   onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load video</span>'">
+              <source src="${mediaSrc}" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+          </div>`;
+        }
+      }
+
+      const safeContent = this.escapeHtml(message.content || '');
+
+      // Compact message (no avatar) for consecutive messages
+      if (!showSender) {
+        const html = `
+          <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact">
+            <div class="message-content-wrapper">
+              ${mediaHtml}
+              ${safeContent || reactionsHtml ? `
+                <div class="message-bubble">
+                  ${safeContent}
+                  ${reactionsHtml}
+                </div>
+              ` : ''}
+              ${showTime ? `
+                <div class="message-time">
+                  ${time}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        return html;
+      }
+
+      // Full message with avatar and sender name inside bubble
+      const senderNameHtml = isIncoming && showSender ? `
+        <div class="bubble-sender-name">${this.escapeHtml(senderName)}</div>
+      ` : '';
+
+      const html = `
+        <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message">
+          ${isIncoming ? `
+            <div class="message-sender">
+              <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+            </div>
+          ` : ''}
+
           <div class="message-content-wrapper">
             ${mediaHtml}
-            ${message.content ? `
+            ${safeContent || senderNameHtml || reactionsHtml ? `
               <div class="message-bubble">
-                ${this.escapeHtml(message.content)}
+                ${senderNameHtml}
+                ${safeContent ? `
+                  <div class="bubble-content">${safeContent}</div>
+                ` : ''}
+                ${reactionsHtml}
               </div>
             ` : ''}
             ${showTime ? `
@@ -464,48 +643,19 @@ const Groups = {
               </div>
             ` : ''}
           </div>
+
+          ${!isIncoming ? `
+            <div class="message-sender">
+              <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
+            </div>
+          ` : ''}
         </div>
       `;
+      return html;
+    } catch (error) {
+      console.error('Error rendering message:', error, message);
+      return `<div class="message error-message">Failed to render message</div>`;
     }
-
-    // Full message with avatar and sender name inside bubble
-    const senderNameHtml = isIncoming && showSender ? `
-      <div class="bubble-sender-name">${this.escapeHtml(senderName)}</div>
-    ` : '';
-
-    return `
-      <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message">
-        ${isIncoming ? `
-          <div class="message-sender">
-            <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
-          </div>
-        ` : ''}
-
-        <div class="message-content-wrapper">
-          ${mediaHtml}
-          ${message.content || senderNameHtml || reactionsHtml ? `
-            <div class="message-bubble">
-              ${senderNameHtml}
-              ${message.content ? `
-                <div class="bubble-content">${this.escapeHtml(message.content)}</div>
-              ` : ''}
-              ${reactionsHtml}
-            </div>
-          ` : ''}
-          ${showTime ? `
-            <div class="message-time">
-              ${time}
-            </div>
-          ` : ''}
-        </div>
-
-        ${!isIncoming ? `
-          <div class="message-sender">
-            <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
-          </div>
-        ` : ''}
-      </div>
-    `;
   },
 
   buildReactionSummary(reactions = []) {
@@ -1047,9 +1197,46 @@ const Groups = {
       }
 
       this.currentMessages = this.currentMessages || [];
-      this.currentMessages.push({ ...data.message, reactions: [] });
+      const newMessage = { ...data.message, reactions: [] };
+      console.log('📨 New message structure:', {
+        messageId: newMessage.id,
+        content: newMessage.content,
+        direction: newMessage.direction,
+        keys: Object.keys(newMessage)
+      });
+      this.currentMessages.push(newMessage);
       this.renderMessages(this.currentMessages);
       this.scrollToBottom();
+    }
+  },
+
+  // Handle group message deletion
+  handleMessageDeleted(data) {
+    if (data.sessionId !== this.currentSession) return;
+    if (!this.selectedGroup || data.groupId !== this.selectedGroup.id) return;
+
+    console.log('Updating deleted message in UI:', data.messageId);
+    console.log('Current messages:', this.currentMessages.map(m => ({ id: m.id, messageId: m.messageId })));
+
+    // Find and update the deleted message in current messages
+    // Try matching by id first, then messageId, then by any id-like field
+    const messageIndex = this.currentMessages.findIndex(m => 
+      m.id === data.messageId || 
+      m.messageId === data.messageId ||
+      (m.message && m.message.id === data.messageId)
+    );
+
+    if (messageIndex !== -1) {
+      console.log(`✓ Found message at index ${messageIndex}`);
+      this.currentMessages[messageIndex].content = '[This message was deleted]';
+      this.currentMessages[messageIndex].isDeleted = true;
+      
+      // Re-render messages to show the update
+      this.renderMessages(this.currentMessages);
+      console.log('✓ Message deleted in UI');
+    } else {
+      console.log('⚠️ Message not found in current messages:', data.messageId);
+      console.log('Available message IDs:', this.currentMessages.map(m => m.id || m.messageId));
     }
   },
 

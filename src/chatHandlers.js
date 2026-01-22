@@ -143,6 +143,13 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       return;
     }
 
+    // Skip system messages (messageStubType without actual message content)
+    // These are artifacts of WhatsApp's internal syncing (E2E_ENCRYPTED, GROUP_CREATE, REVOKE stub, etc.)
+    if (message.messageStubType) {
+      // console.log(`⊘ Skipping system message: stubType=${message.messageStubType}, fromMe=${message.key.fromMe}`);
+      return;
+    }
+
     // Check if this is a group message
     const isGroupMessage = message.key.remoteJid?.includes('@g.us');
 
@@ -152,7 +159,7 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       return;
     }
 
-    // Extract message data - LOG ALL FIELDS FOR DEBUGGING
+    // Extract message data
     const remoteJid = message.key.remoteJid;
     const remoteJidAlt = message.key.remoteJidAlt || null;
     const fromMe = message.key.fromMe;
@@ -228,9 +235,7 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       console.log(`⚠️ @lid JID with no remoteJidAlt - using pushName "${pushName}" workaround`);
     }
 
-    // Extract media URL for different message types
-    const msgType = getMessageType(message);
-
+    // Extract media URL for different message types (msgType already determined above)
     let messageContent = message.message?.conversation ||
                           message.message?.extendedTextMessage?.text ||
                           '[Media]';
@@ -238,24 +243,18 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     let reactionEmoji = null;
     let reactionTargetMessageId = null;
 
-    // Handle protocolMessage (REVOKE - delete message)
+    const msgType = getMessageType(message);
+
+    // Handle protocolMessage (REVOKE - delete message) - REAL REVOKE messages
     if (msgType === 'protocol') {
       const protoMsg = message.message?.protocolMessage;
-
-      // Debug log
-      console.log(`🔍 Protocol message detected:`, {
-        type: protoMsg?.type,
-        typeValue: protoMsg?.type?.valueOf(),
-        hasKey: !!protoMsg?.key,
-        keyId: protoMsg?.key?.id
-      });
 
       if (protoMsg?.type === 0 || protoMsg?.type === 'REVOKE') {
         // Type 0 = REVOKE in Baileys
         const revokedMessageId = protoMsg.key?.id;
 
         if (revokedMessageId) {
-          console.log(`🗑️ Message revoke detected: ${revokedMessageId}`);
+          console.log(`🗑️ Message revoke detected (protocolMessage): ${revokedMessageId}`);
 
           // Get the deleted message's contact_id first
           const [deletedMsg] = await connection.query(
@@ -267,20 +266,40 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
             const contactId = deletedMsg[0].contact_id;
 
             // Update the deleted message in database
-            await connection.query(
+            const [updateResult] = await connection.query(
               `UPDATE messages SET content = '[This message was deleted]', is_deleted = TRUE WHERE message_id = ? AND session_id = ?`,
               [revokedMessageId, sessionId]
             );
 
             console.log(`✓ Message marked as deleted: ${revokedMessageId}`);
+            console.log(`📊 Database update result:`, {
+              affectedRows: updateResult.affectedRows,
+              changedRows: updateResult.changedRows
+            });
 
-            // Emit Socket.io event for real-time update
-            if (io && messageType === 'notify') {
-              io.emit('chat.messageDeleted', {
-                sessionId,
-                messageId: revokedMessageId,
-                contactId: contactId
+            // Emit Socket.io event ALWAYS for REVOKE messages (not just for 'notify' type)
+            // REVOKE messages can come as 'append' (history) or 'notify' (real-time)
+            if (updateResult.affectedRows > 0) {
+              console.log(`📡 Socket.io instance check:`, {
+                ioExists: !!io,
+                ioType: typeof io,
+                eventName: 'chat.messageDeleted'
               });
+
+              if (io) {
+                const eventPayload = {
+                  sessionId,
+                  messageId: revokedMessageId,
+                  contactId: contactId
+                };
+                console.log(`📤 Emitting event with payload:`, eventPayload);
+                io.emit('chat.messageDeleted', eventPayload);
+                console.log(`✓ Event emitted successfully`);
+              } else {
+                console.warn(`⚠️ Socket.io instance is undefined!`);
+              }
+            } else {
+              console.log(`⚠️ No messages updated in database (message not found)`);
             }
           } else {
             console.log(`⚠️ Deleted message not found in database: ${revokedMessageId}`);
@@ -872,31 +891,47 @@ async function getContactsWithRecentMessages(sessionId, search = '', limit = 20)
 }
 
 /**
- * Get message history for a contact
+ * Get message history for a contact with pagination
  */
-async function getContactHistory(sessionId, contactId, limit = 50) {
+async function getContactHistory(sessionId, contactId, limit = 50, offset = 0) {
   const connection = getPool();
 
   try {
     const [messages] = await connection.query(
       `SELECT * FROM messages
        WHERE session_id = ? AND contact_id = ?
-       ORDER BY timestamp ASC
-       LIMIT ?`,
-      [sessionId, contactId, limit]
+       ORDER BY timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [sessionId, contactId, limit, offset]
     );
 
-    return messages.map(m => ({
-      id: m.id,
-      messageId: m.message_id,
-      direction: m.direction,
-      type: m.message_type,
-      content: m.content,
-      mediaUrl: m.media_url,
-      timestamp: m.timestamp,
-      status: m.status,
-      isDeleted: m.is_deleted
-    }));
+    // Get total count for pagination info
+    const [countResult] = await connection.query(
+      `SELECT COUNT(*) as total FROM messages WHERE session_id = ? AND contact_id = ?`,
+      [sessionId, contactId]
+    );
+
+    return {
+      messages: messages.map(m => ({
+        id: m.id,
+        messageId: m.message_id,
+        direction: m.direction,
+        type: m.message_type,
+        content: m.content,
+        mediaUrl: m.media_url,
+        reactionEmoji: m.reaction_emoji,
+        reactionTargetMessageId: m.reaction_target_message_id,
+        timestamp: m.timestamp,
+        status: m.status,
+        isDeleted: m.is_deleted
+      })),
+      pagination: {
+        total: countResult[0].total,
+        offset: parseInt(offset),
+        limit: parseInt(limit),
+        hasMore: parseInt(offset) + messages.length < countResult[0].total
+      }
+    };
   } catch (error) {
     console.error('Error getting message history:', error);
     throw error;
@@ -1023,7 +1058,8 @@ async function handleHistorySync(sessionId, { chats, contacts, messages, syncTyp
           }
 
           // Process message (will check for duplicates internally)
-          await handleIncomingMessage(sessionId, msg, io, 'append');
+          // IMPORTANT: Pass sock as 3rd param, io as 4th, messageType as 5th
+          await handleIncomingMessage(sessionId, msg, sock, io, 'append');
           processedMessages++;
         } catch (error) {
           // Skip errors (likely duplicates or invalid)
@@ -1276,6 +1312,13 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
   const connection = getPool();
 
   try {
+    // Skip system messages (messageStubType without actual message content)
+    // These are artifacts of WhatsApp's internal syncing (E2E_ENCRYPTED, GROUP_CREATE, REVOKE stub, etc.)
+    if (message.messageStubType) {
+      console.log(`⊘ Skipping group system message: stubType=${message.messageStubType}`);
+      return;
+    }
+
     const remoteJid = message.key.remoteJid;
     const fromMe = message.key.fromMe;
     const participantJid = message.key.participant || null;
@@ -1415,17 +1458,40 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
         if (revokedMessageId) {
           console.log(`🗑️ Group message revoke detected: ${revokedMessageId}`);
 
-          await connection.query(
+          const [updateResult] = await connection.query(
             `UPDATE messages SET content = '[This message was deleted]', is_deleted = TRUE WHERE message_id = ? AND session_id = ? AND group_id = ?`,
             [revokedMessageId, sessionId, group.id]
           );
 
-          if (io && messageType === 'notify') {
-            io.emit('chat.groupMessageDeleted', {
-              sessionId,
-              groupId: group.id,
-              messageId: revokedMessageId
+          console.log(`📊 Database update result:`, {
+            affectedRows: updateResult.affectedRows,
+            changedRows: updateResult.changedRows,
+            insertId: updateResult.insertId
+          });
+
+          // Emit Socket.io event ALWAYS for REVOKE messages (not just for 'notify' type)
+          // REVOKE messages can come as 'append' (history) or 'notify' (real-time)
+          if (updateResult.affectedRows > 0) {
+            console.log(`📡 Socket.io instance check:`, {
+              ioExists: !!io,
+              ioType: typeof io,
+              eventName: 'chat.groupMessageDeleted'
             });
+
+            if (io) {
+              const eventPayload = {
+                sessionId,
+                groupId: group.id,
+                messageId: revokedMessageId
+              };
+              console.log(`📤 Emitting event with payload:`, eventPayload);
+              io.emit('chat.groupMessageDeleted', eventPayload);
+              console.log(`✓ Event emitted successfully`);
+            } else {
+              console.warn(`⚠️ Socket.io instance is undefined!`);
+            }
+          } else {
+            console.log(`⚠️ No messages updated in database (message not found)`);
           }
         }
       }

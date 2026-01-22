@@ -18,7 +18,13 @@ const chatState = {
   currentContact: null,
   contacts: {},
   messages: {},
-  selectedMedia: null
+  selectedMedia: null,
+  reactionMap: {}, // Store reactions by target message ID
+  // Message pagination state
+  messagesOffset: 0,
+  messagesLimit: 50,
+  hasMoreMessages: true,
+  isLoadingMoreMessages: false
 };
 
 // CRM state

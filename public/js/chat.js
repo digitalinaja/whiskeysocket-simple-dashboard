@@ -104,20 +104,184 @@ async function openChatContact(contactId) {
 }
 
 /**
- * Load messages for contact
+ * Load messages for contact with pagination
  */
-async function loadContactMessages(contactId) {
+async function loadContactMessages(contactId, append = false) {
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+
+  // Save current scroll height if appending
+  const oldScrollHeight = append ? container.scrollHeight : 0;
+  const oldScrollTop = append ? container.scrollTop : 0;
+
+  if (!append) {
+    chatState.messagesOffset = 0;
+  }
+
   try {
     const sessionId = chatState.currentSession;
-    const res = await fetch(`/api/contacts/${contactId}/messages?sessionId=${sessionId}&limit=100`);
+    const res = await fetch(`/api/contacts/${contactId}/messages?sessionId=${sessionId}&limit=${chatState.messagesLimit}&offset=${chatState.messagesOffset}`);
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.error);
 
-    chatState.messages[contactId] = data.messages;
+    // Reverse to show oldest first (API returns newest first with DESC)
+    const reversedMessages = [...data.messages].reverse();
+
+    if (append) {
+      // When loading more: merge all messages (new + existing) and annotate together
+      // This ensures reaction messages are properly filtered from the combined set
+      const allMessages = [...reversedMessages, ...(chatState.messages[contactId] || [])];
+      chatState.messages[contactId] = annotateMessagesWithReactions(allMessages);
+    } else {
+      // First load - just annotate new messages
+      chatState.messages[contactId] = annotateMessagesWithReactions(reversedMessages);
+    }
+
+    // Update pagination state
+    if (data.pagination) {
+      chatState.hasMoreMessages = data.pagination.hasMore;
+      chatState.messagesOffset = data.pagination.offset + data.messages.length;
+    }
+
     renderMessages();
+
+    // Restore scroll position when loading more
+    if (append) {
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+    }
   } catch (err) {
     console.error('Failed to load messages:', err);
+  }
+}
+
+/**
+ * Load more messages (scroll to top)
+ */
+async function loadMoreContactMessages() {
+  if (chatState.isLoadingMoreMessages || !chatState.hasMoreMessages || !chatState.currentContact) {
+    return;
+  }
+
+  chatState.isLoadingMoreMessages = true;
+  showChatLoadingIndicator();
+
+  try {
+    await loadContactMessages(chatState.currentContact.id, true);
+  } finally {
+    chatState.isLoadingMoreMessages = false;
+    hideChatLoadingIndicator();
+  }
+}
+
+/**
+ * Show loading indicator at top of messages
+ */
+function showChatLoadingIndicator() {
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+
+  const existing = document.getElementById('chatLoadMoreIndicator');
+  if (existing) return;
+
+  const indicator = document.createElement('div');
+  indicator.id = 'chatLoadMoreIndicator';
+  indicator.style.cssText = `
+    padding: 12px;
+    text-align: center;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    color: #94a3b8;
+    font-size: 13px;
+  `;
+  indicator.innerHTML = '<span class="loading-dots">⏳ Loading older messages...</span>';
+  container.insertBefore(indicator, container.firstChild);
+}
+
+/**
+ * Hide loading indicator
+ */
+function hideChatLoadingIndicator() {
+  const indicator = document.getElementById('chatLoadMoreIndicator');
+  if (indicator) {
+    indicator.remove();
+  }
+}
+
+/**
+ * Build reaction summary (count by emoji)
+ */
+function buildReactionSummary(reactions = []) {
+  const counts = {};
+  reactions.forEach((reaction) => {
+    const emoji = reaction.emoji || '❤️';
+    counts[emoji] = (counts[emoji] || 0) + 1;
+  });
+  return Object.entries(counts).map(([emoji, count]) => ({ emoji, count }));
+}
+
+/**
+ * Annotate messages with reactions
+ */
+function annotateMessagesWithReactions(messages) {
+  const reactionMap = {};
+  const visibleMessages = [];
+
+  (messages || []).forEach((msg) => {
+    if (msg.type === 'reaction' && msg.reactionTargetMessageId) {
+      const targetId = msg.reactionTargetMessageId;
+      reactionMap[targetId] = reactionMap[targetId] || [];
+      reactionMap[targetId].push({
+        emoji: msg.reactionEmoji || msg.content || '❤️',
+        senderName: msg.senderName || 'Someone',
+        timestamp: msg.timestamp
+      });
+      console.log(`📌 Reaction found: emoji=${reactionMap[targetId][reactionMap[targetId].length - 1].emoji}, targetId=${targetId}`);
+    } else {
+      visibleMessages.push({ ...msg });
+    }
+  });
+
+  visibleMessages.forEach((msg) => {
+    msg.reactions = buildReactionSummary(reactionMap[msg.messageId]);
+    if (msg.reactions && msg.reactions.length > 0) {
+      console.log(`✓ Message ${msg.messageId} (${msg.direction}) has ${msg.reactions.length} reactions:`, msg.reactions);
+    }
+  });
+
+  chatState.reactionMap = reactionMap;
+  console.log(`📊 Annotated ${visibleMessages.length} messages with ${Object.keys(reactionMap).length} reaction targets`);
+  return visibleMessages;
+}
+
+/**
+ * Handle incoming reaction
+ */
+function addIncomingReaction(message) {
+  if (!message || !message.reactionTargetMessageId) {
+    return;
+  }
+
+  const messages = chatState.messages[chatState.currentContact.id] || [];
+  const targetId = message.reactionTargetMessageId;
+  const emoji = message.reactionEmoji || message.content || '❤️';
+  const entry = {
+    emoji,
+    senderName: message.senderName || 'Someone',
+    timestamp: message.timestamp
+  };
+
+  chatState.reactionMap[targetId] = chatState.reactionMap[targetId] || [];
+  chatState.reactionMap[targetId].push(entry);
+
+  const targetMessage = messages.find(m => m.messageId === targetId);
+  if (targetMessage) {
+    targetMessage.reactions = buildReactionSummary(chatState.reactionMap[targetId]);
+    renderMessages();
+    scrollToBottom(document.getElementById('messagesContainer'));
+  } else if (chatState.currentContact) {
+    loadContactMessages(chatState.currentContact.id);
   }
 }
 
@@ -172,11 +336,23 @@ function renderMessages() {
       textContent = escapeHtml(msg.content);
     }
 
+    // Build reactions HTML
+    let reactionsHtml = '';
+    if (msg.reactions && msg.reactions.length > 0) {
+      const reactionElements = msg.reactions.map(reaction => {
+        const safeEmoji = escapeHtml(reaction.emoji);
+        const countHtml = reaction.count > 1 ? `<span class="reaction-chip-count">${reaction.count}</span>` : '';
+        return `<span class="reaction-chip"><span class="reaction-chip-emoji">${safeEmoji}</span>${countHtml}</span>`;
+      }).join('');
+      reactionsHtml = `<div class="message-reactions">${reactionElements}</div>`;
+    }
+
     return `
       <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}">
         <div class="message-bubble">
           ${!isDeleted ? mediaContent : ''}
           ${textContent}
+          ${reactionsHtml}
           <div class="message-time">
             ${time}
             ${isOutgoing && !isDeleted ? `<span class="message-status">${getMessageStatusIcon(msg.status)}</span>` : ''}
@@ -360,6 +536,18 @@ function initChat() {
     this.style.height = 'auto';
     this.style.height = this.scrollHeight + 'px';
   });
+
+  // Scroll to load more messages
+  const messagesContainer = document.getElementById('messagesContainer');
+  if (messagesContainer) {
+    messagesContainer.addEventListener('scroll', (e) => {
+      const container = e.target;
+      // Load more when scrolled to top (within 100px)
+      if (container.scrollTop < 100 && chatState.hasMoreMessages && !chatState.isLoadingMoreMessages) {
+        loadMoreContactMessages();
+      }
+    });
+  }
 
   // View Contact Details
   document.getElementById('viewContactBtn')?.addEventListener('click', () => {

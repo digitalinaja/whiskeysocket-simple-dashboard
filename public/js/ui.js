@@ -126,6 +126,17 @@ function initSocketIO(socket) {
     if (sessionId === chatState.currentSession) {
       chatState.contacts[contact.id] = contact;
 
+      // Handle reaction messages
+      if (message.type === 'reaction' && message.reactionTargetMessageId) {
+        if (chatState.currentContact?.id === contact.id) {
+          // Call addIncomingReaction if it exists (from chat.js)
+          if (typeof addIncomingReaction === 'function') {
+            addIncomingReaction(message);
+          }
+        }
+        return;
+      }
+
       if (!chatState.messages[contact.id]) {
         chatState.messages[contact.id] = [];
       }

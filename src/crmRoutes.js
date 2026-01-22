@@ -311,20 +311,20 @@ router.get('/contacts/:contactId', async (req, res) => {
 
 /**
  * GET /api/contacts/:contactId/messages
- * Get message history for contact
+ * Get message history for contact with pagination
  */
 router.get('/contacts/:contactId/messages', async (req, res) => {
   try {
     const { contactId } = req.params;
-    const { sessionId, limit = 50 } = req.query;
+    const { sessionId, limit = 50, offset = 0 } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const messages = await chatHandlers.getContactHistory(sessionId, contactId, parseInt(limit));
+    const result = await chatHandlers.getContactHistory(sessionId, contactId, parseInt(limit), parseInt(offset));
 
-    res.json({ messages });
+    res.json(result);
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
@@ -957,20 +957,20 @@ router.get('/groups/:id', async (req, res) => {
 
 /**
  * GET /api/groups/:id/messages
- * Get group messages
+ * Get group messages with pagination
  */
 router.get('/groups/:id/messages', async (req, res) => {
   try {
     const { id } = req.params;
-    const { sessionId, limit = 50 } = req.query;
+    const { sessionId, limit = 50, offset = 0 } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const messages = await groupHandlers.getGroupMessages(sessionId, id, parseInt(limit));
+    const result = await groupHandlers.getGroupMessages(sessionId, id, parseInt(limit), parseInt(offset));
 
-    res.json({ messages });
+    res.json(result);
   } catch (error) {
     console.error('Error fetching group messages:', error);
     res.status(500).json({ error: 'Failed to fetch group messages' });

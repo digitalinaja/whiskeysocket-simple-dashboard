@@ -482,9 +482,9 @@ async function updateGroupCategory(sessionId, groupId, category) {
 }
 
 /**
- * Get group messages
+ * Get group messages with pagination
  */
-async function getGroupMessages(sessionId, groupId, limit = 50) {
+async function getGroupMessages(sessionId, groupId, limit = 50, offset = 0) {
   const connection = getPool();
 
   try {
@@ -513,7 +513,7 @@ async function getGroupMessages(sessionId, groupId, limit = 50) {
       dbGroupId = groupData[0].id;
     }
 
-    console.log(`📂 Querying messages with group_id: ${dbGroupId}, session: ${sessionId}`);
+    console.log(`📂 Querying messages with group_id: ${dbGroupId}, session: ${sessionId}, offset: ${offset}, limit: ${limit}`);
 
     const [messages] = await connection.query(
       `SELECT
@@ -532,28 +532,42 @@ async function getGroupMessages(sessionId, groupId, limit = 50) {
         participant_name
       FROM messages
       WHERE session_id = ? AND group_id = ?
-      ORDER BY timestamp ASC
-      LIMIT ?`,
-      [sessionId, dbGroupId, parseInt(limit)]
+      ORDER BY timestamp DESC
+      LIMIT ? OFFSET ?`,
+      [sessionId, dbGroupId, parseInt(limit), parseInt(offset)]
     );
 
-    console.log(`📂 Found ${messages.length} messages`);
+    // Get total count for pagination info
+    const [countResult] = await connection.query(
+      `SELECT COUNT(*) as total FROM messages WHERE session_id = ? AND group_id = ?`,
+      [sessionId, dbGroupId]
+    );
 
-    return messages.map(m => ({
-      id: m.id,
-      messageId: m.message_id,
-      direction: m.direction,
-      type: m.message_type,
-      content: m.content,
-      mediaUrl: m.media_url,
-      reactionEmoji: m.reaction_emoji,
-      reactionTargetMessageId: m.reaction_target_message_id,
-      timestamp: m.timestamp,
-      status: m.status,
-      isDeleted: m.is_deleted,
-      senderJid: m.participant_jid,
-      senderName: m.participant_name || (m.direction === 'outgoing' ? 'You' : 'Someone')
-    }));
+    console.log(`📂 Found ${messages.length} messages (total: ${countResult[0].total})`);
+
+    return {
+      messages: messages.map(m => ({
+        id: m.id,
+        messageId: m.message_id,
+        direction: m.direction,
+        type: m.message_type,
+        content: m.content,
+        mediaUrl: m.media_url,
+        reactionEmoji: m.reaction_emoji,
+        reactionTargetMessageId: m.reaction_target_message_id,
+        timestamp: m.timestamp,
+        status: m.status,
+        isDeleted: m.is_deleted,
+        senderJid: m.participant_jid,
+        senderName: m.participant_name || (m.direction === 'outgoing' ? 'You' : 'Someone')
+      })),
+      pagination: {
+        total: countResult[0].total,
+        offset: parseInt(offset),
+        limit: parseInt(limit),
+        hasMore: parseInt(offset) + messages.length < countResult[0].total
+      }
+    };
   } catch (error) {
     console.error('Error getting group messages:', error);
     throw error;
