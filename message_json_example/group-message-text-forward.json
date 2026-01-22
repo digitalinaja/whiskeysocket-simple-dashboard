@@ -1,0 +1,30 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": false,
+    "id": "ACC5E2CD0468D8FE127276A75518EB65",
+    "remoteJid": "120363023734036460@g.us"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "contextInfo": {
+        "businessMessageForwardInfo": {
+          "businessOwnerJid": "104423573434424@lid"
+        },
+        "forwardOrigin": "UNKNOWN",
+        "forwardingScore": 1,
+        "isForwarded": true
+      },
+      "inviteLinkGroupTypeV2": "DEFAULT",
+      "previewType": "NONE",
+      "text": "Pelanggan Indibiz Yth PKBM DARUL QURAN,\n\nSaat ini terdapat tunggakan tagihan Indibiz dengan nomor pelanggan 122418231198 yang belum dibayarkan. Mohon segera lakukan pembayaran Indibiz anda agar dapat digunakan kembali. Pembayaran dapat dilakukan di ATM, LinkAja, Indomaret, Alfamart maupun Channel E-Commerce lainnya.\n\nKeterlambatan pembayaran akan dikenakan denda dan isolir sesuai dengan ketentuan yang berlaku. Untuk info lebih lanjut hubungi 1500250 ext 3.\n\nMohon abaikan informasi ini jika sudah melakukan pembayaran tagihan. Terima kasih\n\nHormat kami,\nTelkom Indonesia"
+    },
+    "messageContextInfo": {
+      "messageSecret": "grFgkIpcWJPd6MZvi1oQ+Td7Jk1yOa7bf2eRpgcDZhM="
+    }
+  },
+  "messageSecret": "grFgkIpcWJPd6MZvi1oQ+Td7Jk1yOa7bf2eRpgcDZhM=",
+  "messageTimestamp": "1767352752",
+  "participant": "27011183554587@lid",
+  "reportingTokenInfo": { "reportingTag": "AQ4jT9Lx1Y3XXEolkF628NPGwlc=" }
+}

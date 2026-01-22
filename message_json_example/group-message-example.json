@@ -1,0 +1,46 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": false,
+    "id": "AC52778C73F8927E9D043C9F9226C61E",
+    "remoteJid": "120363023734036460@g.us"
+  },
+  "message": {
+    "associatedChildMessage": {
+      "message": {
+        "imageMessage": {
+          "contextInfo": { "pairedMediaType": "HD_IMAGE_CHILD" },
+          "directPath": "/v/t62.7118-24/612620937_26386898907584806_2148138511471513169_n.enc?ccb=11-4&oh=01_Q5Aa3gHFwf37icEnsQUT1zc3HyYkxOQihz1sijgguEo4_5mxpQ&oe=69840E35&_nc_sid=5e03e0",
+          "fileEncSha256": "nVTK2e7R9SRKrXpAEFWs7Pi6o+G7WRmsSa6pS2JGVsY=",
+          "fileLength": "614181",
+          "fileSha256": "5QrF0agnRiihzDIFWmw5a2HIHCOC+PbyANaGqPfH5r0=",
+          "height": 2340,
+          "mediaKey": "6N5D+1EsAPbbWFsjNJUMlVV9p/AB3ioZw0VCR1kvxto=",
+          "mediaKeyTimestamp": "1767684164",
+          "midQualityFileSha256": "NHjDt9S6rdqK+ZRo3xq9tt6FbzKZ0g4ODiF1Ofl7UXA=",
+          "mimetype": "image/jpeg",
+          "scanLengths": [87584, 133132, 173828, 219637],
+          "scansSidecar": "9MWmDWzktR05mcbbqr6fhG3MGUntz1B3/VvYNCb9NZQzr4FRNMacTg==",
+          "url": "https://mmg.whatsapp.net/v/t62.7118-24/612620937_26386898907584806_2148138511471513169_n.enc?ccb=11-4&oh=01_Q5Aa3gHFwf37icEnsQUT1zc3HyYkxOQihz1sijgguEo4_5mxpQ&oe=69840E35&_nc_sid=5e03e0&mms3=true",
+          "width": 4160
+        }
+      }
+    },
+    "messageContextInfo": {
+      "messageAssociation": {
+        "associationType": "HD_IMAGE_DUAL_UPLOAD",
+        "parentMessageKey": {
+          "fromMe": false,
+          "id": "ACC34570887BE34C24EA121DE5514197",
+          "participant": "15771136720976@lid",
+          "remoteJid": "120363023734036460@g.us"
+        }
+      },
+      "messageSecret": "Btn+5KxLfVtvkv9uooz8jAeu17jReB+9qboh+AeBWPY="
+    }
+  },
+  "messageSecret": "Btn+5KxLfVtvkv9uooz8jAeu17jReB+9qboh+AeBWPY=",
+  "messageTimestamp": "1767684166",
+  "participant": "15771136720976@lid",
+  "reportingTokenInfo": { "reportingTag": "AQ7URE8opc5zXrkaJsEJcw==" }
+}

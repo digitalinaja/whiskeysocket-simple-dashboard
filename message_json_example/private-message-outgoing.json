@@ -1,0 +1,20 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "pn",
+    "fromMe": true,
+    "id": "3EB088683D82B7DADB4778",
+    "participant": "",
+    "remoteJid": "6289662514433@s.whatsapp.net",
+    "remoteJidAlt": "165880243716219@lid"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "text": "*SISTEM KEUANGAN SEKOLAH*\n```INFORMASI PEMBAYARAN```\n==========================\n\nTerima kasih, transaksi pembayaran anda telah kami terima, dengan rincian sebagai berikut:\n\n*Siswa:*\nNIS      : 2425020099\nNama  : RAFA CHIKO DINATA\nKelas   : GUGUS 2 SDIT DUA\n\n*Transaksi:*\nNomor   : ```SIS202601001652```\nTanggal : ```20-01-2026```\nMetode : ```MUAMALAT```\nOperator : ```Administrator```\n\n*Rincian Pembayaran:*\n• SPP SDIT DUA 2025/2026(AGUSTUS) Rp575.000\n• SPP SDIT DUA 2025/2026(SEPTEMBER) Rp575.000\n• SPP SDIT DUA 2025/2026(OKTOBER) Rp575.000\n• SPP SDIT DUA 2025/2026(NOVEMBER) Rp575.000\n• SPP SDIT DUA 2025/2026(DESEMBER) Rp575.000\n----------------------------------\n*Total Pembayaran: Rp2.875.000*\n\n*Informasi Hubungi:*\n☎️ Admin 1 : ```02177880788```\n☎️ Admin 2 : ```085162937271```\n\nHormat kami,\n```Bag. Keuangan```"
+    }
+  },
+  "messageTimestamp": 1769042323,
+  "pushName": "Alhikmah Depok",
+  "status": 3,
+  "verifiedBizName": "Alhikmah Depok"
+}

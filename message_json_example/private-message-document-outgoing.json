@@ -1,0 +1,46 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": true,
+    "id": "AC3C94BC11E3671415DFA293707666B6",
+    "remoteJid": "229162325377142@lid"
+  },
+  "mediaData": {
+    "localPath": "Media/WhatsApp Documents/Sent/DOC-20260116-WA0000."
+  },
+  "message": {
+    "documentMessage": {
+      "directPath": "/v/t62.7119-24/558846664_851709307677006_554560408512503059_n.enc?ccb=11-4&oh=01_Q5Aa3gEerIF6ScrZjWav6uLI5dcaHdDdPcHAeoemXQ1iJr4Cpw&oe=69910FC4&_nc_sid=5e03e0",
+      "fileEncSha256": "tCgIJnY71cxEbjMn0UyM/fnD0oveU2jXkGNWeJG4a3E=",
+      "fileLength": "154124",
+      "fileName": "Aladin_ereceipt_160126_20260116NETBIDJA010O0215662864.pdf",
+      "fileSha256": "kXdgF5P8mhq5pzOvMVkyJe4nh60BumGum/Z/yvvEey0=",
+      "mediaKey": "erkChwX6RQigamVKUjhM+IBr+C4/hygQ7cG2+SZYI4Q=",
+      "mediaKeyTimestamp": "1768534886",
+      "mimetype": "application/pdf",
+      "pageCount": 1,
+      "thumbnailDirectPath": "/v/t62.36145-24/559739334_1613579269801040_6649279856994820327_n.enc?ccb=11-4&oh=01_Q5Aa3gFi9Rmh1dAGZHYcevZXVOlEC0yVXgv7coBXKs-zK2MQIQ&oe=69911550&_nc_sid=5e03e0",
+      "thumbnailEncSha256": "Ex98CguKuEFqn5wowUnDpq/uvbaERzl6uGQHeDWiPmw=",
+      "thumbnailHeight": 480,
+      "thumbnailSha256": "bqNEoHeMtlD8Xy6u57jsI1NF2Jdz5jhgdb2IpJ7FLBI=",
+      "thumbnailWidth": 166,
+      "url": "https://mmg.whatsapp.net/v/t62.7119-24/558846664_851709307677006_554560408512503059_n.enc?ccb=11-4&oh=01_Q5Aa3gEerIF6ScrZjWav6uLI5dcaHdDdPcHAeoemXQ1iJr4Cpw&oe=69910FC4&_nc_sid=5e03e0&mms3=true"
+    },
+    "messageContextInfo": {
+      "messageSecret": "OIngUjNgHze9OsOwf6MzSFuiz5NItbCXCqhE2ccM7Vk="
+    }
+  },
+  "messageC2STimestamp": "1768534887",
+  "messageSecret": "OIngUjNgHze9OsOwf6MzSFuiz5NItbCXCqhE2ccM7Vk=",
+  "messageTimestamp": "1768534886",
+  "originalSelfAuthorUserJidString": "6285187212526@s.whatsapp.net",
+  "status": "DELIVERY_ACK",
+  "userReceipt": [
+    {
+      "playedTimestamp": "0",
+      "readTimestamp": "0",
+      "receiptTimestamp": "1768534887",
+      "userJid": "229162325377142@lid"
+    }
+  ]
+}

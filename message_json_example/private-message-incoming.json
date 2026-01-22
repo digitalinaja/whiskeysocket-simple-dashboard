@@ -1,0 +1,26 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "lid",
+    "fromMe": false,
+    "id": "AC09D4B3F259A4436AB99E664BE3F4C5",
+    "participant": "",
+    "remoteJid": "27011183554587@lid",
+    "remoteJidAlt": "628388105401@s.whatsapp.net"
+  },
+  "message": {
+    "conversation": "Sip",
+    "messageContextInfo": {
+      "deviceListMetadata": {
+        "recipientKeyHash": "TmfOgpp2mtHpgw==",
+        "recipientTimestamp": "1768461642",
+        "senderKeyHash": "Vz8U2hRAu7ZJCQ==",
+        "senderTimestamp": "1768134773"
+      },
+      "deviceListMetadataVersion": 2,
+      "messageSecret": "PlA6qpbI4Q9B7zMkXje0Jw8se3H5XwAmn3CNPHDyJho="
+    }
+  },
+  "messageTimestamp": 1769053302,
+  "pushName": "AA"
+}

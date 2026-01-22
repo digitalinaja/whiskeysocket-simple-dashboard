@@ -1,0 +1,14 @@
+{
+  "key": {
+    "remoteJid": "120363421884101339@g.us",
+    "fromMe": false,
+    "id": "3931208644",
+    "participant": "27011183554587@lid"
+  },
+  "messageTimestamp": "1769065567",
+  "participant": "27011183554587@lid",
+  "messageStubType": "GROUP_PARTICIPANT_REMOVE",
+  "messageStubParameters": [
+    "{\"id\":\"276905299312840@lid\",\"phoneNumber\":\"622177880788@s.whatsapp.net\",\"admin\":null}"
+  ]
+}

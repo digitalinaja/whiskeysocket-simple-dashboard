@@ -1,0 +1,11 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": true,
+    "id": "AC663F8B869715D6AD5085EDF99AF051",
+    "remoteJid": "221714936000616@lid"
+  },
+  "messageStubType": "E2E_ENCRYPTED",
+  "messageTimestamp": "1764510782",
+  "status": "PENDING"
+}

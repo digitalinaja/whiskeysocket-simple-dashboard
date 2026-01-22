@@ -1,0 +1,23 @@
+{
+  "key": {
+    "remoteJid": "120363023734036460@g.us",
+    "fromMe": false,
+    "id": "ACB74FB1DBA7299ABB47829BF0012447",
+    "participant": "27011183554587@lid",
+    "participantAlt": "628388105401@s.whatsapp.net",
+    "addressingMode": "lid"
+  },
+  "messageTimestamp": 1769064013,
+  "pushName": "AA",
+  "broadcast": false,
+  "message": {
+    "protocolMessage": {
+      "key": {
+        "remoteJid": "120363023734036460@g.us",
+        "fromMe": true,
+        "id": "ACFAA623CE7DA0DF1531D1B188C502B8"
+      },
+      "type": "REVOKE"
+    }
+  }
+}

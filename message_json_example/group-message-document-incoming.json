@@ -1,0 +1,30 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": false,
+    "id": "3F8C3261D5A46D934EA1",
+    "remoteJid": "120363023734036460@g.us"
+  },
+  "message": {
+    "documentMessage": {
+      "contextInfo": {
+        "forwardOrigin": "UNKNOWN",
+        "forwardingScore": 1,
+        "isForwarded": true
+      },
+      "directPath": "/v/t62.7119-24/594463600_1143996511230124_5365651008276647083_n.enc?ccb=11-4&oh=01_Q5Aa3AEY8dNLeBJl89GEpxBQogKNFWPUootkaVpWvNePZPlsVQ&oe=6955E372&_nc_sid=5e03e0",
+      "fileEncSha256": "PSIlcXJMtOwPuvlAjIglHvfOn6KTmpCYEyHIckINzyQ=",
+      "fileLength": "348516",
+      "fileName": "Inv_DQM.pdf",
+      "fileSha256": "kONe0yuDI0lYqGmp60ZTVlRJ0+0MSNBein3Oc80uAUE=",
+      "mediaKey": "wy40dC2DyYCD7GxoCuRI1kp3HvSV3v01YQqaf5+qIv8=",
+      "mediaKeyTimestamp": "1764650403",
+      "mimetype": "application/pdf",
+      "pageCount": 4,
+      "title": "Inv_DQM.pdf",
+      "url": "https://mmg.whatsapp.net/v/t62.7119-24/594463600_1143996511230124_5365651008276647083_n.enc?ccb=11-4&oh=01_Q5Aa3AEY8dNLeBJl89GEpxBQogKNFWPUootkaVpWvNePZPlsVQ&oe=6955E372&_nc_sid=5e03e0&mms3=true"
+    }
+  },
+  "messageTimestamp": "1764650405",
+  "participant": "27011183554587@lid"
+}

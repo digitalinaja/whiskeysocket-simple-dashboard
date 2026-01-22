@@ -1,0 +1,12 @@
+{
+  "key": {
+    "fromMe": false,
+    "id": "260341141",
+    "participant": "27011183554587@lid",
+    "remoteJid": "120363408288640238@g.us"
+  },
+  "messageStubParameters": ["The Group Web"],
+  "messageStubType": "GROUP_CREATE",
+  "messageTimestamp": "1769065045",
+  "participant": "27011183554587@lid"
+}

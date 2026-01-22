@@ -1,0 +1,18 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": false,
+    "id": "ACFCCB1B3F0F8E6D47E7742C7F2234AC",
+    "remoteJid": "120363023734036460@g.us"
+  },
+  "message": {
+    "conversation": "Tolong buatin reimburse cad",
+    "messageContextInfo": {
+      "messageSecret": "b+g+bX7JCgZ3TZFlHrCX2/a4L3GdkcyuyYGv1gDdjps="
+    }
+  },
+  "messageSecret": "b+g+bX7JCgZ3TZFlHrCX2/a4L3GdkcyuyYGv1gDdjps=",
+  "messageTimestamp": "1768462479",
+  "participant": "27011183554587@lid",
+  "reportingTokenInfo": { "reportingTag": "AQ+gj25iAY2CC21Yv64zoALfYJw=" }
+}

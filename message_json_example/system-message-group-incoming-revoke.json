@@ -1,0 +1,14 @@
+{
+  "isMentionedInStatus": false,
+  "key": {
+    "fromMe": false,
+    "id": "AC23E856807EC9D237E2200C91B648A5",
+    "remoteJid": "120363023734036460@g.us"
+  },
+  "messageStubParameters": ["AC713E8F29F12026B53B13F844715626"],
+  "messageStubType": "REVOKE",
+  "messageTimestamp": "1768976706",
+  "participant": "15771136720976@lid",
+  "reportingTokenInfo": { "reportingTag": "AQ8c/1gjyCB5rsypovB8MaQ3IDI=" },
+  "revokeMessageTimestamp": "1768976890"
+}

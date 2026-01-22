@@ -1,0 +1,25 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "lid",
+    "fromMe": false,
+    "id": "AC35DCB9FB4390E46DDA05A9A26A6BAB",
+    "participant": "27011183554587@lid",
+    "participantAlt": "628388105401@s.whatsapp.net",
+    "remoteJid": "120363421884101339@g.us"
+  },
+  "message": {
+    "reactionMessage": {
+      "key": {
+        "fromMe": true,
+        "id": "3EB0FACD66D2C5616C9DC0",
+        "participant": "276905299312840@lid",
+        "remoteJid": "120363421884101339@g.us"
+      },
+      "senderTimestampMs": "1769011473750",
+      "text": "👍"
+    }
+  },
+  "messageTimestamp": 1769011473,
+  "pushName": "AA"
+}

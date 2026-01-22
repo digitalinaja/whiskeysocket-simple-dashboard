@@ -1,0 +1,11 @@
+{
+  "key": {
+    "fromMe": true,
+    "id": "3EB0031526B15DE3533348",
+    "remoteJid": "120363421884101339@g.us"
+  },
+  "message": { "extendedTextMessage": { "text": "terimaksih" } },
+  "messageTimestamp": "1768837856",
+  "participant": "622177880788:58@s.whatsapp.net",
+  "status": "PENDING"
+}
