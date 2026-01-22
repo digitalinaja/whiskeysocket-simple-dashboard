@@ -129,6 +129,16 @@ function initBroadcastPresets() {
   const cooldownMinInput = document.getElementById('cooldownMin');
   const cooldownMaxInput = document.getElementById('cooldownMax');
 
+  // Toggle advanced settings
+  const toggleAdvanced = document.getElementById('toggleAdvanced');
+  const advancedSettings = document.getElementById('advancedSettings');
+  const advancedArrow = document.getElementById('advancedArrow');
+
+  toggleAdvanced?.addEventListener('click', () => {
+    advancedSettings.classList.toggle('hidden');
+    advancedArrow?.classList.toggle('rotate-180');
+  });
+
   function applyPreset(preset) {
     const config = BROADCAST_PRESETS[preset];
     if (!config) return;
@@ -138,13 +148,69 @@ function initBroadcastPresets() {
     cooldownAfterInput.value = config.cooldownAfter;
     cooldownMinInput.value = config.cooldownMin;
     cooldownMaxInput.value = config.cooldownMax;
-    presetDescription.textContent = config.description;
 
     const isCustom = preset === 'custom';
     cooldownMinInput.disabled = !isCustom;
     cooldownMaxInput.disabled = !isCustom;
 
+    // Update preset description card
+    updatePresetDescription(preset);
+
     updateEstimatedTime();
+  }
+
+  function updatePresetDescription(preset) {
+    const descriptions = {
+      moderate: {
+        emoji: '🟡',
+        name: 'Moderate Mode',
+        color: 'amber',
+        details: [
+          'Speed: 3-8 seconds/message',
+          'Cooldown every 30 messages',
+          'Best for: 50-200 numbers'
+        ]
+      },
+      conservative: {
+        emoji: '🟢',
+        name: 'Conservative Mode',
+        color: 'emerald',
+        details: [
+          'Speed: 5-15 seconds/message',
+          'Cooldown every 20 messages',
+          'Best for: 200-1000 numbers'
+        ]
+      },
+      'very-conservative': {
+        emoji: '🔒',
+        name: 'Very Conservative Mode',
+        color: 'blue',
+        details: [
+          'Speed: 10-30 seconds/message',
+          'Cooldown every 15 messages',
+          'Best for: Important contacts / >1000 numbers'
+        ]
+      },
+      custom: {
+        emoji: '⚙️',
+        name: 'Custom Mode',
+        color: 'purple',
+        details: [
+          'Configure your own settings',
+          'Manual control over delays',
+          'Use with caution'
+        ]
+      }
+    };
+
+    const desc = descriptions[preset] || descriptions.moderate;
+    presetDescription.className = `p-3 rounded-lg bg-${desc.color}-500/10 border border-${desc.color}-500/20 text-sm mb-4`;
+    presetDescription.innerHTML = `
+      <p class="font-medium text-${desc.color}-200 mb-1">${desc.emoji} ${desc.name}</p>
+      <ul class="text-xs text-${desc.color}-200/70 space-y-1">
+        ${desc.details.map(d => `<li>• ${d}</li>`).join('')}
+      </ul>
+    `;
   }
 
   function updateEstimatedTime() {
@@ -157,8 +223,18 @@ function initBroadcastPresets() {
       numbersCount = numbersRaw ? numbersRaw.split(/\r?\n/).filter(Boolean).length : 0;
     }
 
+    // Update recipient count
+    const recipientCount = document.getElementById('recipientCount');
+    if (recipientCount) {
+      recipientCount.textContent = numbersCount;
+    }
+
+    const estimatedTimeValue = document.getElementById('estimatedTimeValue');
+    const estimatedTimeSub = document.getElementById('estimatedTimeSub');
+
     if (numbersCount === 0) {
-      document.getElementById('estimatedTime').textContent = 'Masukkan nomor untuk melihat estimasi';
+      if (estimatedTimeValue) estimatedTimeValue.textContent = '--';
+      if (estimatedTimeSub) estimatedTimeSub.textContent = 'Add recipients to see estimate';
       return;
     }
 
@@ -178,12 +254,22 @@ function initBroadcastPresets() {
     const seconds = Math.floor((totalDelayMs % 60000) / 1000);
 
     let timeString = '';
-    if (hours > 0) timeString += `${hours} jam `;
-    if (minutes > 0) timeString += `${minutes} menit `;
-    if (seconds > 0 || timeString === '') timeString += `${seconds} detik`;
+    if (hours > 0) timeString += `${hours}h `;
+    if (minutes > 0) timeString += `${minutes}m `;
+    if (seconds > 0 || timeString === '') timeString += `${seconds}s`;
 
-    document.getElementById('estimatedTime').innerHTML =
-      `<strong>Estimasi waktu:</strong> ${timeString} untuk ${numbersCount} nomor`;
+    if (estimatedTimeValue) estimatedTimeValue.textContent = timeString.trim();
+    if (estimatedTimeSub) estimatedTimeSub.textContent = `for ${numbersCount} recipients`;
+
+    // Show warning for large broadcasts
+    const warningBanner = document.getElementById('warningBanner');
+    if (warningBanner) {
+      if (numbersCount > 500) {
+        warningBanner.classList.remove('hidden');
+      } else {
+        warningBanner.classList.add('hidden');
+      }
+    }
   }
 
   document.getElementById('broadcastNumbers')?.addEventListener('input', updateEstimatedTime);
@@ -207,30 +293,64 @@ function initBroadcastPresets() {
 function initBroadcastCSV() {
   const methodManualBtn = document.getElementById('methodManual');
   const methodCsvBtn = document.getElementById('methodCsv');
+  const csvDropzone = document.querySelector('.csv-dropzone');
+  const browseBtn = document.getElementById('browseCsv');
 
+  // Method toggle buttons
   methodManualBtn?.addEventListener('click', () => {
     broadcastInputMethod = 'manual';
     document.getElementById('manualInput').style.display = 'block';
     document.getElementById('csvInput').style.display = 'none';
-    methodManualBtn.style.background = 'var(--accent)';
-    methodManualBtn.style.color = 'var(--bg)';
-    methodCsvBtn.style.background = 'transparent';
-    methodCsvBtn.style.color = 'var(--muted)';
-    document.getElementById('personalizationHelper').style.display = 'none';
+    methodManualBtn.classList.add('bg-cyan-500/20', 'text-cyan-200');
+    methodManualBtn.classList.remove('text-slate-400');
+    methodCsvBtn.classList.remove('bg-cyan-500/20', 'text-cyan-200');
+    methodCsvBtn.classList.add('text-slate-400');
+    document.getElementById('personalizationHelper').classList.add('hidden');
   });
 
   methodCsvBtn?.addEventListener('click', () => {
     broadcastInputMethod = 'csv';
     document.getElementById('manualInput').style.display = 'none';
     document.getElementById('csvInput').style.display = 'block';
-    methodCsvBtn.style.background = 'var(--accent)';
-    methodCsvBtn.style.color = 'var(--bg)';
-    methodManualBtn.style.background = 'transparent';
-    methodManualBtn.style.color = 'var(--muted)';
+    methodCsvBtn.classList.add('bg-cyan-500/20', 'text-cyan-200');
+    methodCsvBtn.classList.remove('text-slate-400');
+    methodManualBtn.classList.remove('bg-cyan-500/20', 'text-cyan-200');
+    methodManualBtn.classList.add('text-slate-400');
+  });
+
+  // Click handlers for file upload
+  csvDropzone?.addEventListener('click', () => {
+    document.getElementById('csvFile').click();
+  });
+
+  browseBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('csvFile').click();
+  });
+
+  // Drag and drop support
+  csvDropzone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    csvDropzone.classList.add('border-cyan-500/50', 'bg-cyan-500/5');
+  });
+
+  csvDropzone?.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    csvDropzone.classList.remove('border-cyan-500/50', 'bg-cyan-500/5');
+  });
+
+  csvDropzone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    csvDropzone.classList.remove('border-cyan-500/50', 'bg-cyan-500/5');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.csv')) {
+      handleCsvFile(file);
+    }
   });
 
   // Download template
-  document.getElementById('downloadTemplate')?.addEventListener('click', () => {
+  document.getElementById('downloadTemplate')?.addEventListener('click', (e) => {
+    e.stopPropagation();
     const template = 'phone;name\n6281234567890;Budi Santoso\n6289876543210;Siti Wijaya\n6285555555555;Ahmad Rahman\n\n# Notes:\n# - Kolom "phone" WAJIB (format: country code + nomor)\n# - Kolom "name" OPSIONAL (untuk personalisasi pesan)\n# - Gunakan {name} dalam pesan untuk personalisasi';
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -241,12 +361,33 @@ function initBroadcastCSV() {
     URL.revokeObjectURL(url);
   });
 
-  // Preview CSV
-  document.getElementById('previewCsv')?.addEventListener('click', () => {
-    if (csvBroadcastData.length === 0) {
-      alert('Upload CSV file dulu!');
-      return;
+  // CSV file upload
+  document.getElementById('csvFile')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleCsvFile(file);
     }
+  });
+
+  function handleCsvFile(file) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      parseCSV(event.target.result);
+      // Show file info
+      const csvFileInfo = document.getElementById('csvFileInfo');
+      const csvFileName = document.getElementById('csvFileName');
+      if (csvFileInfo && csvFileName) {
+        csvFileName.textContent = file.name;
+        csvFileInfo.classList.remove('hidden');
+      }
+      // Auto-show preview
+      showCsvPreview();
+    };
+    reader.readAsText(file);
+  }
+
+  function showCsvPreview() {
+    if (csvBroadcastData.length === 0) return;
 
     const previewBody = document.getElementById('previewBody');
     const previewDiv = document.getElementById('csvPreview');
@@ -261,24 +402,12 @@ function initBroadcastCSV() {
     `).join('');
 
     document.getElementById('previewCount').textContent = csvBroadcastData.length;
-    previewDiv.style.display = 'block';
+    previewDiv.classList.remove('hidden');
 
     if (csvBroadcastData.some(d => d.name)) {
-      document.getElementById('personalizationHelper').style.display = 'block';
+      document.getElementById('personalizationHelper').classList.remove('hidden');
     }
-  });
-
-  // CSV file upload
-  document.getElementById('csvFile')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      parseCSV(event.target.result);
-    };
-    reader.readAsText(file);
-  });
+  }
 
   // Initialize manual button state
   methodManualBtn?.click();
@@ -317,6 +446,18 @@ function parseCSV(text) {
   const validCount = csvBroadcastData.length;
   const withName = csvBroadcastData.filter(d => d.name).length;
 
-  document.getElementById('csvStats').innerHTML =
-    `✅ Valid: ${validCount} contacts | 🏷️ Dengan nama: ${withName}`;
+  const csvStats = document.getElementById('csvStats');
+  if (csvStats) {
+    csvStats.innerHTML = `✅ Valid: ${validCount} contacts | 🏷️ With names: ${withName}`;
+  }
+
+  // Update recipient count
+  const recipientCount = document.getElementById('recipientCount');
+  if (recipientCount) {
+    recipientCount.textContent = validCount;
+  }
+
+  // Trigger estimation update
+  const event = new Event('input');
+  document.getElementById('broadcastNumbers')?.dispatchEvent(event);
 }
