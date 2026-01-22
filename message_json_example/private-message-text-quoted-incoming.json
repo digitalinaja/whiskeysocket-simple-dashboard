@@ -1,0 +1,38 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "lid",
+    "fromMe": false,
+    "id": "ACB2B5E31B4B278CA47FBBF538F9BC32",
+    "participant": "",
+    "remoteJid": "27011183554587@lid",
+    "remoteJidAlt": "628388105401@s.whatsapp.net"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "contextInfo": {
+        "participant": "628388105401@s.whatsapp.net",
+        "quotedMessage": {
+          "conversation": "Wlkmslm wr wb iya sdh bisa skrg silahkan I don't have a lot problem at the"
+        },
+        "quotedType": "EXPLICIT",
+        "stanzaId": "AC1E52D6909361AE32EFDE5F2A3B592F"
+      },
+      "inviteLinkGroupTypeV2": "DEFAULT",
+      "previewType": "NONE",
+      "text": "Quoted pesan"
+    },
+    "messageContextInfo": {
+      "deviceListMetadata": {
+        "recipientKeyHash": "aCFn+hhM4ywBcQ==",
+        "recipientTimestamp": "1769057800",
+        "senderKeyHash": "OhJjQtzbvgw8ww==",
+        "senderTimestamp": "1769055163"
+      },
+      "deviceListMetadataVersion": 2,
+      "messageSecret": "pKZHGEPvdrI6iB2hXDeVHqQJQY6X09j5FoiUDVFS/7c="
+    }
+  },
+  "messageTimestamp": 1769075438,
+  "pushName": "AA"
+}

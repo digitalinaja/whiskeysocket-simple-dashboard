@@ -1,0 +1,29 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "lid",
+    "fromMe": false,
+    "id": "AC7A2F4DA1B90855B31172B4B1E64C04",
+    "participant": "27011183554587@lid",
+    "participantAlt": "628388105401@s.whatsapp.net",
+    "remoteJid": "120363421884101339@g.us"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "contextInfo": {
+        "participant": "207030996475983@lid",
+        "quotedMessage": { "conversation": "sip bisa" },
+        "quotedType": "EXPLICIT",
+        "stanzaId": "3EB0A987D3AFB19ACF4C3F"
+      },
+      "inviteLinkGroupTypeV2": "DEFAULT",
+      "previewType": "NONE",
+      "text": "Ok"
+    },
+    "messageContextInfo": {
+      "messageSecret": "9Fuh5epv6iGpGijU/kAGno8eH8NcmhH8ba2C4kW8CuE="
+    }
+  },
+  "messageTimestamp": 1769077416,
+  "pushName": "AA"
+}

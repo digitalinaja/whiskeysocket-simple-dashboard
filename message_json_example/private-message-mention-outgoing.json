@@ -1,0 +1,24 @@
+{
+  "broadcast": false,
+  "key": {
+    "addressingMode": "lid",
+    "fromMe": false,
+    "id": "AC1EB28B7728C2FED1782A5009E3C003",
+    "participant": "27011183554587@lid",
+    "participantAlt": "628388105401@s.whatsapp.net",
+    "remoteJid": "120363421884101339@g.us"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "contextInfo": { "mentionedJid": ["207030996475983@lid"] },
+      "inviteLinkGroupTypeV2": "DEFAULT",
+      "previewType": "NONE",
+      "text": "@207030996475983 halo brother"
+    },
+    "messageContextInfo": {
+      "messageSecret": "xkTne5CYzk1caYLFf0Cw5OMffuuaMRWq8/9Tu5utKYE="
+    }
+  },
+  "messageTimestamp": 1769076160,
+  "pushName": "AA"
+}
