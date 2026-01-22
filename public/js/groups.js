@@ -519,14 +519,25 @@ const Groups = {
       }).join('');
 
       container.innerHTML = renderedGroups;
+
+      // Add click event listeners for quoted message previews
+      container.querySelectorAll('.quoted-message-preview').forEach(preview => {
+        preview.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const quotedId = preview.getAttribute('data-quoted-id');
+          if (quotedId) {
+            this.scrollToQuotedMessage(quotedId);
+          }
+        };
+      });
     } catch (error) {
       console.error('Error rendering messages:', error);
-      const container = document.getElementById('groupMessagesContainer');
-      if (container) {
-        container.innerHTML = `<div class="error-state"><p>Failed to render messages. Check console for details.</p></div>`;
+      const errorContainer = document.getElementById('groupMessagesContainer');
+      if (errorContainer) {
+        errorContainer.innerHTML = `<div class="error-state"><p>Failed to render messages. Check console for details.</p></div>`;
       }
     }
-
 
     // Scroll to bottom
     this.scrollToBottom();
@@ -606,8 +617,7 @@ const Groups = {
         quotedPreviewHtml = `
           <div class="quoted-message-preview"
                data-quoted-id="${this.escapeHtml(message.quotedMessageId)}"
-               style="cursor: pointer; padding: 8px 12px; margin: 0 -12px 8px -12px; border-left: 3px solid #06b6d4; background: rgba(6, 182, 212, 0.1); border-radius: 4px;"
-               onclick="Groups.scrollToQuotedMessage('${this.escapeHtml(message.quotedMessageId)}')">
+               style="cursor: pointer; padding: 8px 12px; margin: 0 -12px 8px -12px; border-left: 3px solid #06b6d4; background: rgba(6, 182, 212, 0.1); border-radius: 4px;">
             <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">💬 Reply:</div>
             <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
               ${this.escapeHtml(message.quotedContent)}
@@ -1367,31 +1377,55 @@ const Groups = {
   },
 
   // Scroll to quoted message
-  scrollToQuotedMessage(messageId) {
+  async scrollToQuotedMessage(messageId) {
     const container = document.getElementById('groupMessagesContainer');
     if (!container) return;
 
-    // Find the message element with the matching messageId
-    const targetMessage = container.querySelector(`[data-message-id="${messageId}"]`);
+    const maxAttempts = 5;
+    let attempt = 0;
 
-    if (targetMessage) {
-      // Scroll to the message
-      targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    while (attempt < maxAttempts) {
+      // Find the message element with the matching messageId
+      const targetMessage = container.querySelector(`[data-message-id="${messageId}"]`);
 
-      // Highlight effect
-      targetMessage.style.transition = 'background-color 0.3s';
-      targetMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
+      if (targetMessage) {
+        // Scroll to the message
+        targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      setTimeout(() => {
-        targetMessage.style.backgroundColor = '';
-      }, 2000);
+        // Highlight effect
+        targetMessage.style.transition = 'background-color 0.3s';
+        targetMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
 
-      console.log(`✓ Scrolled to quoted message: ${messageId}`);
-    } else {
-      console.log(`⚠️ Quoted message not found in current view: ${messageId}`);
-      // Message might be in older messages, need to load more?
-      this.showNotification('Original message not loaded. Try scrolling up to load more messages.', 'info');
+        setTimeout(() => {
+          targetMessage.style.backgroundColor = '';
+        }, 2000);
+
+        console.log(`✓ Scrolled to quoted message: ${messageId} (attempt ${attempt + 1})`);
+        return;
+      }
+
+      // Message not found, try loading more if available
+      if (!this.hasMoreMessages) {
+        console.log(`⚠️ No more messages to load, quoted message not found: ${messageId}`);
+        this.showNotification('⚠️ Pesan terlalu lama. Mohon minta pengirim untuk kirim ulang pesannya.', 'error');
+        return;
+      }
+
+      console.log(`📥 Loading more messages to find quoted message... (attempt ${attempt + 1}/${maxAttempts})`);
+      this.showNotification(`⏳ Memuat pesan-pesan lama... (${attempt + 1}/${maxAttempts})`, 'info');
+
+      // Load more messages
+      await this.loadMoreMessages();
+
+      // Wait a bit for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      attempt++;
     }
+
+    // If we get here, message still not found after max attempts
+    console.log(`⚠️ Quoted message not found after ${maxAttempts} attempts: ${messageId}`);
+    this.showNotification('⚠️ Pesan terlalu lama. Mohon minta pengirim untuk kirim ulang pesannya.', 'error');
   },
 
   // Format timestamp to time
@@ -1454,7 +1488,6 @@ const Groups = {
 
 // Global wrapper for scrollToQuotedMessage (for HTML onclick attribute)
 window.Groups = Groups;
-window.Groups.scrollToQuotedMessage = Groups.scrollToQuotedMessage.bind(Groups);
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
