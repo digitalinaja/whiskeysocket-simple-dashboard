@@ -14,7 +14,9 @@
     @apply w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
   }
   button {
-    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400 transition;
+    @apply rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200;
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   table {
     @apply w-full text-sm;
@@ -37,16 +39,63 @@
     @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-500;
   }
   :root[data-theme='light'] button {
-    @apply text-slate-900;
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:ring-offset-white;
+  }
+
+  /* Light theme button variants */
+  :root[data-theme='light'] .btn-ghost {
+    @apply border-slate-300 text-slate-700 bg-transparent;
+    @apply hover:bg-slate-100 hover:text-slate-900 hover:border-slate-400;
+    @apply active:bg-slate-200 active:border-slate-300;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .btn-primary {
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .btn-danger {
+    @apply bg-rose-600 text-white hover:bg-rose-500 active:bg-rose-700;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .btn-sm {
+    @apply border-slate-300 text-slate-700 bg-slate-50;
+    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply active:bg-slate-300 active:border-slate-400;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .btn-icon {
+    @apply border-slate-300 text-slate-700 bg-slate-50;
+    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply active:bg-slate-300 active:border-slate-400;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .btn-send {
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:ring-offset-white;
+  }
+
+  :root[data-theme='light'] .attach-media-btn {
+    @apply border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-100;
   }
 }
 
 @layer components {
   .mobile-menu-toggle {
-    @apply fixed left-4 top-4 z-50 rounded-lg bg-slate-800/80 px-3 py-2 text-slate-100 md:hidden;
+    @apply fixed left-4 top-4 z-50 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 md:hidden;
+    @apply bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-slate-100;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .theme-toggle {
-    @apply fixed right-4 top-4 z-40 hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs text-slate-200 md:flex;
+    @apply fixed right-4 top-4 z-40 hidden items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition-all duration-200 md:flex;
+    @apply border-slate-700 bg-slate-900/80 text-slate-200;
+    @apply hover:bg-slate-800 hover:border-slate-600 hover:text-slate-100;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .sidebar {
     @apply fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-slate-800 bg-slate-900/80 backdrop-blur transition-transform duration-200 md:static md:translate-x-0;
@@ -84,10 +133,16 @@
     @apply mb-2 px-3 text-xs uppercase tracking-wide text-slate-500;
   }
   .nav-item {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-50 transition;
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200;
+    @apply text-slate-400 hover:bg-slate-800/80 hover:text-slate-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-inset;
   }
   .nav-item.active {
-    @apply bg-slate-800 text-slate-50;
+    @apply bg-slate-800 text-cyan-400 font-semibold;
+    @apply focus:ring-cyan-500/50;
+  }
+  .nav-item:hover.active {
+    @apply bg-slate-700 text-cyan-300;
   }
   .main-content {
     @apply min-h-screen flex-1 px-5 py-6 md:px-8;
@@ -135,22 +190,63 @@
     @apply flex flex-wrap gap-2;
   }
   .btn-ghost {
-    @apply rounded-lg border border-slate-700 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-slate-800;
+    @apply rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200;
+    @apply border-slate-700 bg-transparent text-slate-300;
+    @apply hover:bg-slate-800 hover:text-slate-100 hover:border-slate-600;
+    @apply active:bg-slate-700 active:border-slate-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .btn-danger {
-    @apply rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-400;
+    @apply rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200;
+    @apply bg-rose-600 text-white hover:bg-rose-500 active:bg-rose-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .btn-primary {
-    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-cyan-400;
+    @apply rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200;
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .btn-sm {
-    @apply rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700;
+    @apply rounded-md border px-3 py-1 text-xs font-medium transition-all duration-200;
+    @apply border-slate-700 bg-slate-800 text-slate-300;
+    @apply hover:bg-slate-700 hover:text-slate-100 hover:border-slate-600;
+    @apply active:bg-slate-600;
+    @apply focus:outline-none focus:ring-1 focus:ring-slate-400 focus:ring-offset-1 focus:ring-offset-slate-950;
   }
   .btn-icon {
-    @apply rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm text-slate-200 hover:bg-slate-700;
+    @apply rounded-lg border p-2 text-sm font-medium transition-all duration-200;
+    @apply border-slate-700 bg-slate-800 text-slate-300;
+    @apply hover:bg-slate-700 hover:text-slate-100 hover:border-slate-600;
+    @apply active:bg-slate-600 active:border-slate-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .btn-send {
-    @apply rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400;
+    @apply rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200;
+    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
+  }
+
+  /* Disabled button states */
+  button:disabled,
+  .btn-disabled {
+    @apply opacity-50 cursor-not-allowed;
+    @apply hover:bg-cyan-600 hover:text-white;
+    @apply focus:ring-0;
+  }
+  :root[data-theme='light'] button:disabled,
+  :root[data-theme='light'] .btn-disabled {
+    @apply opacity-50 cursor-not-allowed;
+    @apply hover:bg-cyan-600 hover:text-white;
+    @apply focus:ring-0;
+  }
+
+  /* Button loading state */
+  .btn-loading {
+    @apply relative pointer-events-none opacity-75;
+  }
+  .btn-loading::after {
+    content: '';
+    @apply absolute inset-0 m-auto block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent;
   }
   .log {
     @apply rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300;
@@ -232,7 +328,11 @@
     @apply flex items-end gap-2;
   }
   .attach-media-btn {
-    @apply h-10 w-10 rounded-full border border-slate-700 text-lg text-slate-200 transition hover:border-slate-600 hover:bg-slate-800;
+    @apply h-10 w-10 rounded-full border text-lg font-medium transition-all duration-200;
+    @apply border-slate-700 text-slate-300 bg-slate-900/50;
+    @apply hover:border-slate-500 hover:bg-slate-700 hover:text-slate-100;
+    @apply active:bg-slate-600 active:border-slate-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .selected-media-preview {
     @apply mt-3;
@@ -359,7 +459,10 @@
     @apply flex items-center justify-between border-b border-slate-800 pb-3;
   }
   .modal-close {
-    @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200;
+    @apply rounded-lg border px-2 py-1 text-xs font-medium transition-all duration-200;
+    @apply border-slate-700 bg-slate-800 text-slate-300;
+    @apply hover:bg-slate-700 hover:text-slate-100 hover:border-slate-600;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-900;
   }
   .modal-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4;
@@ -378,7 +481,10 @@
     to { transform: translateX(100%); opacity: 0; }
   }
   .btn-close-modal {
-    @apply rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 transition;
+    @apply rounded-lg border px-2 py-1 text-xs font-medium transition-all duration-200;
+    @apply border-slate-700 bg-slate-800 text-slate-300;
+    @apply hover:bg-slate-700 hover:text-slate-100 hover:border-slate-600;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-900;
   }
   .job-list {
     @apply space-y-3;
@@ -422,7 +528,10 @@
     @apply px-2 py-2 text-left text-xs font-medium text-slate-300;
   }
   .sidebar-collapse {
-    @apply absolute -right-3 top-6 hidden h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 md:flex;
+    @apply absolute -right-3 top-6 hidden h-7 w-7 items-center justify-center rounded-full border text-sm font-medium transition-all duration-200 md:flex;
+    @apply border-slate-700 bg-slate-900 text-slate-300;
+    @apply hover:bg-slate-700 hover:text-slate-100 hover:border-slate-600;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-900;
   }
   .contact-info {
     @apply flex items-center gap-3;
@@ -540,10 +649,13 @@
     @apply bg-white/90 border-slate-200;
   }
   :root[data-theme='light'] .nav-item {
-    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-800;
   }
   :root[data-theme='light'] .nav-item.active {
-    @apply bg-slate-200 text-slate-900;
+    @apply bg-cyan-50 text-cyan-700 font-semibold border-l-2 border-cyan-600;
+  }
+  :root[data-theme='light'] .nav-item:hover.active {
+    @apply bg-cyan-100 text-cyan-800;
   }
   :root[data-theme='light'] .card,
   :root[data-theme='light'] .chat-contacts-sidebar,
@@ -687,18 +799,31 @@
   :root[data-theme='light'] .modal-content {
     @apply bg-white border-slate-200;
   }
+  :root[data-theme='light'] .modal-close {
+    @apply border-slate-300 bg-slate-50 text-slate-700;
+    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+  }
+  :root[data-theme='light'] .btn-close-modal {
+    @apply border-slate-300 bg-slate-50 text-slate-700;
+    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+  }
 }
   /* Groups UI Styles - Uses same layout as Chat */
   .category-tabs {
     @apply flex flex-wrap gap-1 p-1.5 mb-1 rounded-lg bg-slate-800/30;
   }
   .category-tab {
-    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition;
-    @apply text-slate-400 hover:bg-slate-800 hover:text-slate-200;
-    @apply border border-transparent;
+    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200;
+    @apply text-slate-400 bg-transparent border border-transparent;
+    @apply hover:bg-slate-800/60 hover:text-slate-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-inset;
   }
   .category-tab.active {
-    @apply bg-cyan-500/20 text-cyan-200 border-cyan-500/30;
+    @apply bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold;
+    @apply focus:ring-cyan-500/50;
+  }
+  .category-tab:hover.active {
+    @apply bg-cyan-500/30 text-cyan-200 border-cyan-500/50;
   }
   .tab-icon {
     @apply text-sm;
@@ -1045,6 +1170,30 @@
   }
   :root[data-theme='light'] .input-method-btn:not(.active) {
     @apply text-slate-500 hover:text-slate-700 hover:bg-slate-200;
+  }
+  :root[data-theme='light'] .category-tab {
+    @apply text-slate-500 hover:bg-slate-200 hover:text-slate-700;
+  }
+  :root[data-theme='light'] .category-tab.active {
+    @apply bg-cyan-100 text-cyan-700 border-cyan-300;
+  }
+  :root[data-theme='light'] .category-tab:hover.active {
+    @apply bg-cyan-200 text-cyan-800 border-cyan-400;
+  }
+
+  /* Light theme toggle buttons */
+  :root[data-theme='light'] .mobile-menu-toggle {
+    @apply bg-slate-200 text-slate-700 hover:bg-slate-300 hover:text-slate-900;
+    @apply focus:ring-offset-white;
+  }
+  :root[data-theme='light'] .theme-toggle {
+    @apply border-slate-300 bg-white/90 text-slate-600;
+    @apply hover:bg-slate-100 hover:border-slate-400 hover:text-slate-800;
+    @apply focus:ring-offset-white;
+  }
+  :root[data-theme='light'] .sidebar-collapse {
+    @apply border-slate-300 bg-white text-slate-600;
+    @apply hover:bg-slate-200 hover:text-slate-800 hover:border-slate-400;
   }
   :root[data-theme='light'] .csv-dropzone {
     @apply border-slate-300;
