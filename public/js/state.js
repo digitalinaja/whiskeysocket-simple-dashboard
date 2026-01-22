@@ -81,3 +81,51 @@ let broadcastInputMethod = 'manual';
 
 // Current job data for detail view
 let currentJob = null;
+
+// Function to clear chat/group data for a session
+function clearSessionChatData(sessionId) {
+  // Clear chat data if current session is being logged out
+  if (chatState.currentSession === sessionId) {
+    chatState.currentSession = null;
+    chatState.currentContact = null;
+    chatState.contacts = {};
+    chatState.messages = {};
+    
+    // Clear UI
+    const chatWelcome = document.getElementById('chatWelcome');
+    const chatConversation = document.getElementById('chatConversation');
+    if (chatWelcome) chatWelcome.style.display = 'block';
+    if (chatConversation) chatConversation.style.display = 'none';
+    
+    const chatContactsList = document.getElementById('chatContactsList');
+    if (chatContactsList) {
+      chatContactsList.innerHTML = '<div class="loading-contacts">Select a session to start messaging</div>';
+    }
+    
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) messagesContainer.innerHTML = '';
+  }
+  
+  // Clear group data if current session is being logged out
+  if (groupManager && groupManager.currentSession === sessionId) {
+    groupManager.currentSession = null;
+    groupManager.currentGroup = null;
+    groupManager.groups = {};
+    groupManager.messages = {};
+    
+    // Clear UI
+    const groupChatWelcome = document.getElementById('groupChatWelcome');
+    const groupConversation = document.getElementById('groupConversation');
+    if (groupChatWelcome) groupChatWelcome.style.display = 'block';
+    if (groupConversation) groupConversation.style.display = 'none';
+    
+    const groupsList = document.getElementById('groupsList');
+    if (groupsList) {
+      groupsList.innerHTML = '<div class="loading-contacts">Select a session to start messaging</div>';
+    }
+    
+    const groupMessagesContainer = document.getElementById('groupMessagesContainer');
+    if (groupMessagesContainer) groupMessagesContainer.innerHTML = '';
+  }
+}
+

@@ -236,6 +236,9 @@ function updateSessionsListView(filter = '') {
 // Logout session from card
 async function logoutSessionFromCard(sessionId) {
   try {
+    // Clear chat/group data before logout
+    clearSessionChatData(sessionId);
+    
     await postJson(`/sessions/${sessionId}/logout`, {});
     state.qrMap[sessionId] = null;
     // Reload sessions
@@ -318,6 +321,9 @@ function initSessions() {
   document.getElementById('logoutSessionBtn').addEventListener('click', async () => {
     const log = document.getElementById('sessionActionLog');
     try {
+      // Clear chat/group data before logout
+      clearSessionChatData(state.activeSession);
+      
       await postJson(`/sessions/${state.activeSession}/logout`, {});
       state.qrMap[state.activeSession] = null;
       log.textContent = 'Logged out. Please scan the new QR code.';
