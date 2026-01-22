@@ -11,6 +11,7 @@ import initSocket from "./socket.js";
 import { initDatabase, testConnection, createDefaultLeadStatuses } from "./database.js";
 import * as chatHandlers from "./chatHandlers.js";
 import * as googleContacts from "./googleContacts.js";
+import * as sessionStorage from "./sessionStorage.js";
 import crmRoutes from "./crmRoutes.js";
 import { authenticateToken, checkAuthStatus } from "./authMiddleware.js";
 import jwt from "jsonwebtoken";
@@ -268,6 +269,38 @@ async function createSession(sessionId) {
   if (sessions.has(sessionId)) return sessions.get(sessionId);
   const authPath = getAuthPath(sessionId);
   fs.mkdirSync(authPath, { recursive: true });
+
+  // Try to restore session from cloud if local files don't exist
+  const hasLocalCreds = fs.existsSync(path.join(authPath, 'creds.json'));
+  if (!hasLocalCreds) {
+    try {
+      console.log(`Attempting to restore session ${sessionId} from cloud...`);
+      const cloudSession = await sessionStorage.loadSessionFromCloud(sessionId);
+      
+      if (cloudSession) {
+        // Restore credentials from cloud
+        if (cloudSession.creds) {
+          fs.writeFileSync(
+            path.join(authPath, 'creds.json'),
+            JSON.stringify(cloudSession.creds, null, 2)
+          );
+          console.log(`✓ Restored credentials for ${sessionId} from cloud`);
+        }
+        
+        // Restore app state if exists
+        if (cloudSession.appState) {
+          fs.writeFileSync(
+            path.join(authPath, 'app-state-sync-key-undefined.json'),
+            JSON.stringify(cloudSession.appState, null, 2)
+          );
+          console.log(`✓ Restored app state for ${sessionId} from cloud`);
+        }
+      }
+    } catch (err) {
+      console.warn(`Could not restore session ${sessionId} from cloud (this is normal for new sessions):`, err.message);
+      // Continue - this is normal for new sessions
+    }
+  }
 
   const session = {
     id: sessionId,
@@ -1125,6 +1158,132 @@ app.post("/sessions/:id/logout", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Logout failed", err);
     res.status(500).json({ error: err?.message || "Logout failed" });
+  }
+});
+
+// Cloud session management endpoints
+// List all sessions in cloud
+app.get("/cloud/sessions", authenticateToken, async (req, res) => {
+  try {
+    const sessions = await sessionStorage.listSessionsFromCloud();
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Error listing cloud sessions:', error);
+    res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// Get session sync status
+app.get("/cloud/sessions/:id/status", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const sessions = await sessionStorage.listSessionsFromCloud();
+    const session = sessions.find(s => s.session_id === id);
+    
+    if (!session) {
+      return res.status(404).json({ error: "Session not found in cloud" });
+    }
+    
+    res.json({
+      sessionId: id,
+      lastSynced: session.last_synced_at,
+      createdAt: session.created_at,
+      updatedAt: session.updated_at
+    });
+  } catch (error) {
+    console.error('Error getting session status:', error);
+    res.status(500).json({ error: 'Failed to get session status' });
+  }
+});
+
+// Delete session from cloud
+app.delete("/cloud/sessions/:id", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await sessionStorage.deleteSessionFromCloud(id);
+    res.json({ status: "deleted from cloud", sessionId: id });
+  } catch (error) {
+    console.error('Error deleting cloud session:', error);
+    res.status(500).json({ error: 'Failed to delete session from cloud' });
+  }
+});
+
+// Force sync session to cloud
+app.post("/cloud/sessions/:id/sync", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const session = sessions.get(id);
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    
+    const authPath = getAuthPath(id);
+    const credsPath = path.join(authPath, 'creds.json');
+    
+    if (!fs.existsSync(credsPath)) {
+      return res.status(400).json({ error: "No credentials found for this session" });
+    }
+    
+    // Read and sync to cloud
+    const sessionData = {
+      creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
+      timestamp: Date.now()
+    };
+    
+    const appStatePath = path.join(authPath, 'app-state-sync-key-undefined.json');
+    if (fs.existsSync(appStatePath)) {
+      try {
+        sessionData.appState = JSON.parse(fs.readFileSync(appStatePath, 'utf8'));
+      } catch (err) {
+        console.warn('Could not read app state');
+      }
+    }
+    
+    await sessionStorage.saveSessionToCloud(id, sessionData);
+    res.json({ status: "synced to cloud", sessionId: id });
+  } catch (error) {
+    console.error('Error syncing session to cloud:', error);
+    res.status(500).json({ error: 'Failed to sync to cloud' });
+  }
+});
+
+// Restore session from cloud
+app.post("/cloud/sessions/:id/restore", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const cloudSession = await sessionStorage.loadSessionFromCloud(id);
+    
+    if (!cloudSession) {
+      return res.status(404).json({ error: "Session not found in cloud" });
+    }
+    
+    const authPath = getAuthPath(id);
+    fs.mkdirSync(authPath, { recursive: true });
+    
+    // Restore credentials
+    if (cloudSession.creds) {
+      fs.writeFileSync(
+        path.join(authPath, 'creds.json'),
+        JSON.stringify(cloudSession.creds, null, 2)
+      );
+    }
+    
+    // Restore app state if exists
+    if (cloudSession.appState) {
+      fs.writeFileSync(
+        path.join(authPath, 'app-state-sync-key-undefined.json'),
+        JSON.stringify(cloudSession.appState, null, 2)
+      );
+    }
+    
+    // Reload session
+    sessions.delete(id);
+    await createSession(id);
+    
+    res.json({ status: "restored from cloud", sessionId: id });
+  } catch (error) {
+    console.error('Error restoring session from cloud:', error);
+    res.status(500).json({ error: 'Failed to restore from cloud' });
   }
 });
 

@@ -12,7 +12,10 @@
     "db:migrate": "node src/scripts/dbMigrate.js",
     "db:validate": "node src/scripts/dbValidate.js",
     "db:backup": "node src/scripts/dbBackup.js",
-    "db:force-migrate": "node src/scripts/dbMigrate.js --force"
+    "db:force-migrate": "node src/scripts/dbMigrate.js --force",
+    "cloud:list": "node scripts/cloudSessionCli.js list",
+    "cloud:status": "node scripts/cloudSessionCli.js status",
+    "cloud:delete": "node scripts/cloudSessionCli.js delete"
   },
   "keywords": [],
   "author": "",

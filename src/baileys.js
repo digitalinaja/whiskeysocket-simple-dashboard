@@ -1,4 +1,7 @@
 import qrcode from "qrcode-terminal";
+import * as sessionStorage from "./sessionStorage.js";
+import fs from "fs";
+import path from "path";
 
 let baileysPromise;
 function getBaileys() {
@@ -65,7 +68,45 @@ async function startWA({
       }
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", async () => {
+      // Save locally first
+      await saveCreds();
+      
+      // Then sync to cloud
+      try {
+        // Read the latest session files from disk
+        const credsPath = path.join(authPath, 'creds.json');
+        const appStatePath = path.join(authPath, 'app-state-sync-key-undefined.json');
+        
+        if (fs.existsSync(credsPath)) {
+          const sessionData = {
+            creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
+            timestamp: Date.now()
+          };
+          
+          // Try to read app state if exists
+          if (fs.existsSync(appStatePath)) {
+            try {
+              sessionData.appState = JSON.parse(fs.readFileSync(appStatePath, 'utf8'));
+            } catch (err) {
+              console.warn('Could not read app state:', err.message);
+            }
+          }
+          
+          // Save to cloud with error handling
+          try {
+            await sessionStorage.saveSessionToCloud(sessionId, sessionData);
+            console.log(`☁️ Session ${sessionId} synced to cloud`);
+          } catch (cloudErr) {
+            // Log error but don't crash - local session still works
+            console.error(`⚠️ Failed to sync session ${sessionId} to cloud:`, cloudErr.message);
+          }
+        }
+      } catch (err) {
+        console.error('Error during cloud sync:', err);
+        // Continue operation even if cloud sync fails
+      }
+    });
 
     // Handle incoming messages (both real-time and history sync)
     sock.ev.on("messages.upsert", async ({ messages, type }) => {

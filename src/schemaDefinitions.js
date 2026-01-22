@@ -289,4 +289,20 @@ export const SCHEMA_DEFINITIONS = {
       { column: 'new_status_id', refTable: 'lead_statuses', refColumn: 'id', onDelete: 'RESTRICT' },
     ],
   },
+  whatsapp_sessions: {
+    columns: {
+      id: 'INT AUTO_INCREMENT PRIMARY KEY',
+      session_id: 'VARCHAR(255) NOT NULL UNIQUE',
+      session_data: 'LONGBLOB NOT NULL COMMENT "Encrypted Baileys session credentials"',
+      last_synced_at: 'TIMESTAMP NULL COMMENT "Last sync time from device to cloud"',
+      created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      updated_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+    },
+    indexes: [
+      { name: 'idx_session_id', columns: ['session_id'] },
+      { name: 'idx_last_synced', columns: ['last_synced_at'] },
+      { name: 'idx_updated_at', columns: ['updated_at'] },
+    ],
+  },
 };
+
