@@ -2,7 +2,7 @@
 // Declarative schema definition for all tables, columns, indexes, and constraints
 // Used for validation and migration
 
-export const SCHEMA_VERSION = '1.2.0';
+export const SCHEMA_VERSION = '1.3.0';
 
 export const SCHEMA_DEFINITIONS = {
   contacts: {
@@ -56,6 +56,9 @@ export const SCHEMA_DEFINITIONS = {
       message_type: "ENUM('text','image','video','audio','document','location','contact','reaction') DEFAULT 'text'",
       reaction_emoji: 'VARCHAR(64) NULL',
       reaction_target_message_id: 'VARCHAR(100) NULL',
+      quoted_message_id: 'VARCHAR(255) NULL COMMENT "ID of the quoted/replied message"',
+      quoted_content: 'TEXT NULL COMMENT "Content of the quoted/replied message"',
+      quoted_participant: 'VARCHAR(255) NULL COMMENT "JID of the quoted message sender"',
       content: 'TEXT NULL',
       media_url: 'TEXT NULL',
       raw_message: 'JSON NULL',
@@ -75,6 +78,7 @@ export const SCHEMA_DEFINITIONS = {
       { name: 'idx_direction', columns: ['direction'] },
       { name: 'idx_is_group_message', columns: ['is_group_message'] },
       { name: 'idx_group_id', columns: ['group_id'] },
+      { name: 'idx_quoted_message_id', columns: ['quoted_message_id'] },
     ],
     foreignKeys: [
       { column: 'contact_id', refTable: 'contacts', refColumn: 'id', onDelete: 'SET NULL' },

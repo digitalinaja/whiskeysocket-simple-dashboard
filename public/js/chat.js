@@ -210,6 +210,65 @@ function hideChatLoadingIndicator() {
 }
 
 /**
+ * Scroll to quoted message
+ */
+function scrollToQuotedMessage(messageId) {
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+
+  // Find the message element with the matching messageId
+  const targetMessage = container.querySelector(`[data-message-id="${messageId}"]`);
+
+  if (targetMessage) {
+    // Scroll to the message
+    targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Highlight effect
+    targetMessage.style.transition = 'background-color 0.3s';
+    targetMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
+
+    setTimeout(() => {
+      targetMessage.style.backgroundColor = '';
+    }, 2000);
+
+    console.log(`✓ Scrolled to quoted message: ${messageId}`);
+  } else {
+    console.log(`⚠️ Quoted message not found in current view: ${messageId}`);
+    // Message might be in older messages, need to load more?
+    // For now, just show a toast
+    showToast('Original message not loaded. Try scrolling up to load more messages.', 'info');
+  }
+}
+
+/**
+ * Show toast notification
+ */
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+/**
  * Build reaction summary (count by emoji)
  */
 function buildReactionSummary(reactions = []) {
@@ -336,6 +395,22 @@ function renderMessages() {
       textContent = escapeHtml(msg.content);
     }
 
+    // Build quoted message preview
+    let quotedPreviewHtml = '';
+    if (msg.quotedContent && msg.quotedMessageId) {
+      quotedPreviewHtml = `
+        <div class="quoted-message-preview"
+             data-quoted-id="${escapeHtml(msg.quotedMessageId)}"
+             style="cursor: pointer; padding: 8px 12px; margin: 0 -12px 8px -12px; border-left: 3px solid #06b6d4; background: rgba(6, 182, 212, 0.1); border-radius: 4px;"
+             onclick="scrollToQuotedMessage('${escapeHtml(msg.quotedMessageId)}')">
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">💬 Reply:</div>
+          <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${escapeHtml(msg.quotedContent)}
+          </div>
+        </div>
+      `;
+    }
+
     // Build reactions HTML
     let reactionsHtml = '';
     if (msg.reactions && msg.reactions.length > 0) {
@@ -348,8 +423,9 @@ function renderMessages() {
     }
 
     return `
-      <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}">
+      <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}" data-message-id="${escapeHtml(msg.messageId)}">
         <div class="message-bubble">
+          ${quotedPreviewHtml}
           ${!isDeleted ? mediaContent : ''}
           ${textContent}
           ${reactionsHtml}

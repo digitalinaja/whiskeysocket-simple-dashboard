@@ -242,6 +242,34 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     let mediaUrl = null;
     let reactionEmoji = null;
     let reactionTargetMessageId = null;
+    let quotedMessageId = null;
+    let quotedContent = null;
+    let quotedParticipant = null;
+
+    // Extract quoted message info (reply/quote)
+    const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+    if (contextInfo?.quotedMessage) {
+      quotedMessageId = contextInfo.stanzaId || null;
+      quotedParticipant = contextInfo.participant || null;
+
+      // Extract quoted content based on type
+      const quotedMsg = contextInfo.quotedMessage;
+      if (quotedMsg.conversation) {
+        quotedContent = quotedMsg.conversation;
+      } else if (quotedMsg.extendedTextMessage?.text) {
+        quotedContent = quotedMsg.extendedTextMessage.text;
+      } else if (quotedMsg.imageMessage?.caption) {
+        quotedContent = `🖼️ ${quotedMsg.imageMessage.caption || '[Image]'}`;
+      } else if (quotedMsg.videoMessage?.caption) {
+        quotedContent = `🎞️ ${quotedMsg.videoMessage.caption || '[Video]'}`;
+      } else if (quotedMsg.documentMessage) {
+        quotedContent = `📄 ${quotedMsg.documentMessage.fileName || '[Document]'}`;
+      } else {
+        quotedContent = '[Attachment]';
+      }
+
+      console.log(`💬 Quoted message detected:`, { quotedMessageId, quotedParticipant, quotedContent });
+    }
 
     const msgType = getMessageType(message);
 
@@ -384,9 +412,9 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     }
 
     await connection.query(
-      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, raw_message, timestamp, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, reactionEmoji, reactionTargetMessageId, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
+      `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, quoted_message_id, quoted_content, quoted_participant, raw_message, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, reactionEmoji, reactionTargetMessageId, quotedMessageId, quotedContent, quotedParticipant, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
     );
 
     // Download and save media locally if it's a media message
@@ -425,6 +453,9 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
           timestamp: timestamp.toISOString(),
           reactionEmoji,
           reactionTargetMessageId,
+          quotedMessageId,
+          quotedContent,
+          quotedParticipant,
           status: isFromMe ? 'sent' : 'delivered'
         },
         contact: {
@@ -921,6 +952,9 @@ async function getContactHistory(sessionId, contactId, limit = 50, offset = 0) {
         mediaUrl: m.media_url,
         reactionEmoji: m.reaction_emoji,
         reactionTargetMessageId: m.reaction_target_message_id,
+        quotedMessageId: m.quoted_message_id,
+        quotedContent: m.quoted_content,
+        quotedParticipant: m.quoted_participant,
         timestamp: m.timestamp,
         status: m.status,
         isDeleted: m.is_deleted
@@ -1204,6 +1238,32 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
       let mediaUrl = null;
       let reactionEmoji = null;
       let reactionTargetMessageId = null;
+      let quotedMessageId = null;
+      let quotedContent = null;
+      let quotedParticipant = null;
+
+      // Extract quoted message info (reply/quote)
+      const contextInfo = message?.extendedTextMessage?.contextInfo;
+      if (contextInfo?.quotedMessage) {
+        quotedMessageId = contextInfo.stanzaId || null;
+        quotedParticipant = contextInfo.participant || null;
+
+        // Extract quoted content based on type
+        const quotedMsg = contextInfo.quotedMessage;
+        if (quotedMsg.conversation) {
+          quotedContent = quotedMsg.conversation;
+        } else if (quotedMsg.extendedTextMessage?.text) {
+          quotedContent = quotedMsg.extendedTextMessage.text;
+        } else if (quotedMsg.imageMessage?.caption) {
+          quotedContent = `🖼️ ${quotedMsg.imageMessage.caption || '[Image]'}`;
+        } else if (quotedMsg.videoMessage?.caption) {
+          quotedContent = `🎞️ ${quotedMsg.videoMessage.caption || '[Video]'}`;
+        } else if (quotedMsg.documentMessage) {
+          quotedContent = `📄 ${quotedMsg.documentMessage.fileName || '[Document]'}`;
+        } else {
+          quotedContent = '[Attachment]';
+        }
+      }
 
       const messageType = getMessageType({ message });
 
@@ -1241,8 +1301,8 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
 
       // Insert into database
       await connection.query(
-        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, raw_message, timestamp, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, quoted_message_id, quoted_content, quoted_participant, raw_message, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           contactId,
@@ -1253,6 +1313,9 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
           mediaUrl,
           reactionEmoji,
           reactionTargetMessageId,
+          quotedMessageId,
+          quotedContent,
+          quotedParticipant,
           JSON.stringify(msgData),  // Store full msgData object (includes key, message, etc.)
           timestamp,
           isFromMe ? 'sent' : 'delivered'
@@ -1447,6 +1510,34 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
     let mediaUrl = null;
     let reactionEmoji = null;
     let reactionTargetMessageId = null;
+    let quotedMessageId = null;
+    let quotedContent = null;
+    let quotedParticipant = null;
+
+    // Extract quoted message info (reply/quote)
+    const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+    if (contextInfo?.quotedMessage) {
+      quotedMessageId = contextInfo.stanzaId || null;
+      quotedParticipant = contextInfo.participant || null;
+
+      // Extract quoted content based on type
+      const quotedMsg = contextInfo.quotedMessage;
+      if (quotedMsg.conversation) {
+        quotedContent = quotedMsg.conversation;
+      } else if (quotedMsg.extendedTextMessage?.text) {
+        quotedContent = quotedMsg.extendedTextMessage.text;
+      } else if (quotedMsg.imageMessage?.caption) {
+        quotedContent = `🖼️ ${quotedMsg.imageMessage.caption || '[Image]'}`;
+      } else if (quotedMsg.videoMessage?.caption) {
+        quotedContent = `🎞️ ${quotedMsg.videoMessage.caption || '[Video]'}`;
+      } else if (quotedMsg.documentMessage) {
+        quotedContent = `📄 ${quotedMsg.documentMessage.fileName || '[Document]'}`;
+      } else {
+        quotedContent = '[Attachment]';
+      }
+
+      console.log(`💬 Group quoted message detected:`, { quotedMessageId, quotedParticipant, quotedContent });
+    }
 
     // Handle protocolMessage (REVOKE - delete message)
     if (msgType === 'protocol') {
@@ -1546,9 +1637,9 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       const [result] = await connection.query(
         `INSERT INTO messages (
           session_id, contact_id, message_id, direction, message_type, content, media_url,
-          reaction_emoji, reaction_target_message_id,
+          reaction_emoji, reaction_target_message_id, quoted_message_id, quoted_content, quoted_participant,
           raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           null, // contact_id is NULL for group messages (not linked to individual contact)
@@ -1559,6 +1650,9 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
           mediaUrl,
           reactionEmoji,
           reactionTargetMessageId,
+          quotedMessageId,
+          quotedContent,
+          quotedParticipant,
           JSON.stringify(message),
           timestamp,
           fromMe ? 'sent' : 'delivered',
@@ -1639,6 +1733,9 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
           timestamp: timestamp.toISOString(),
           reactionEmoji,
           reactionTargetMessageId,
+          quotedMessageId,
+          quotedContent,
+          quotedParticipant,
           status: fromMe ? 'sent' : 'delivered',
           senderName: participantName,
           senderJid: participantJid

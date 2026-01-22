@@ -539,6 +539,16 @@ const Groups = {
       const senderName = message.senderName || (isIncoming ? 'Someone' : 'You');
       const senderInitial = senderName.charAt(0).toUpperCase();
 
+      // Debug quoted message
+      if (message.quotedContent || message.quotedMessageId) {
+        console.log('💬 Quoted message in render:', {
+          messageId: message.messageId,
+          quotedMessageId: message.quotedMessageId,
+          quotedContent: message.quotedContent,
+          quotedParticipant: message.quotedParticipant
+        });
+      }
+
       // Get avatar color based on sender name
       const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
       const colorIndex = senderName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
@@ -549,7 +559,7 @@ const Groups = {
         </div>
       `;
       const time = this.formatTime(message.timestamp);
-      
+
       // Build reactions HTML safely
       let reactionsHtml = '';
       if (message.reactions && message.reactions.length > 0) {
@@ -590,14 +600,31 @@ const Groups = {
 
       const safeContent = this.escapeHtml(message.content || '');
 
+      // Build quoted message preview
+      let quotedPreviewHtml = '';
+      if (message.quotedContent && message.quotedMessageId) {
+        quotedPreviewHtml = `
+          <div class="quoted-message-preview"
+               data-quoted-id="${this.escapeHtml(message.quotedMessageId)}"
+               style="cursor: pointer; padding: 8px 12px; margin: 0 -12px 8px -12px; border-left: 3px solid #06b6d4; background: rgba(6, 182, 212, 0.1); border-radius: 4px;"
+               onclick="Groups.scrollToQuotedMessage('${this.escapeHtml(message.quotedMessageId)}')">
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">💬 Reply:</div>
+            <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${this.escapeHtml(message.quotedContent)}
+            </div>
+          </div>
+        `;
+      }
+
       // Compact message (no avatar) for consecutive messages
       if (!showSender) {
         const html = `
-          <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact">
+          <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact" data-message-id="${this.escapeHtml(message.messageId)}">
             <div class="message-content-wrapper">
               ${mediaHtml}
-              ${safeContent || reactionsHtml ? `
+              ${safeContent || quotedPreviewHtml || reactionsHtml ? `
                 <div class="message-bubble">
+                  ${quotedPreviewHtml}
                   ${safeContent}
                   ${reactionsHtml}
                 </div>
@@ -619,7 +646,7 @@ const Groups = {
       ` : '';
 
       const html = `
-        <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message">
+        <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message" data-message-id="${this.escapeHtml(message.messageId)}">
           ${isIncoming ? `
             <div class="message-sender">
               <span class="sender-avatar" style="background: ${avatarColor};">${this.escapeHtml(senderInitial)}</span>
@@ -628,9 +655,10 @@ const Groups = {
 
           <div class="message-content-wrapper">
             ${mediaHtml}
-            ${safeContent || senderNameHtml || reactionsHtml ? `
+            ${safeContent || senderNameHtml || quotedPreviewHtml || reactionsHtml ? `
               <div class="message-bubble">
                 ${senderNameHtml}
+                ${quotedPreviewHtml}
                 ${safeContent ? `
                   <div class="bubble-content">${safeContent}</div>
                 ` : ''}
@@ -1338,6 +1366,34 @@ const Groups = {
     }
   },
 
+  // Scroll to quoted message
+  scrollToQuotedMessage(messageId) {
+    const container = document.getElementById('groupMessagesContainer');
+    if (!container) return;
+
+    // Find the message element with the matching messageId
+    const targetMessage = container.querySelector(`[data-message-id="${messageId}"]`);
+
+    if (targetMessage) {
+      // Scroll to the message
+      targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Highlight effect
+      targetMessage.style.transition = 'background-color 0.3s';
+      targetMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
+
+      setTimeout(() => {
+        targetMessage.style.backgroundColor = '';
+      }, 2000);
+
+      console.log(`✓ Scrolled to quoted message: ${messageId}`);
+    } else {
+      console.log(`⚠️ Quoted message not found in current view: ${messageId}`);
+      // Message might be in older messages, need to load more?
+      this.showNotification('Original message not loaded. Try scrolling up to load more messages.', 'info');
+    }
+  },
+
   // Format timestamp to time
   formatTime(timestamp) {
     const date = new Date(timestamp);
@@ -1395,6 +1451,10 @@ const Groups = {
     }
   }
 };
+
+// Global wrapper for scrollToQuotedMessage (for HTML onclick attribute)
+window.Groups = Groups;
+window.Groups.scrollToQuotedMessage = Groups.scrollToQuotedMessage.bind(Groups);
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
