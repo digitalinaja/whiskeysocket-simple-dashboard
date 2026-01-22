@@ -975,3 +975,80 @@
   .session-item-status {
     @apply text-sm text-slate-400 flex items-center gap-2;
   }
+
+  /* Broadcast UI Improvements */
+  .broadcast-grid {
+    @apply grid gap-6 lg:grid-cols-3;
+  }
+  .broadcast-main {
+    @apply lg:col-span-2 space-y-6;
+  }
+  .broadcast-sidebar {
+    @apply space-y-6;
+  }
+  .input-method-toggle {
+    @apply flex gap-2 p-1 bg-slate-800/30 rounded-lg;
+  }
+  .input-method-btn {
+    @apply flex-1 rounded-md px-4 py-2 text-sm font-medium transition;
+  }
+  .input-method-btn.active {
+    @apply bg-cyan-500/20 text-cyan-200;
+  }
+  .input-method-btn:not(.active) {
+    @apply text-slate-400 hover:text-slate-200 hover:bg-slate-800/50;
+  }
+  .csv-dropzone {
+    @apply border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-slate-600 transition cursor-pointer;
+  }
+  .csv-dropzone:hover {
+    @apply border-cyan-500/50 bg-cyan-500/5;
+  }
+  .preset-description-card {
+    @apply p-3 rounded-lg border text-sm;
+  }
+  .preset-description-card.moderate {
+    @apply bg-amber-500/10 border-amber-500/20;
+  }
+  .preset-description-card.conservative {
+    @apply bg-emerald-500/10 border-emerald-500/20;
+  }
+  .preset-description-card.very-conservative {
+    @apply bg-blue-500/10 border-blue-500/20;
+  }
+  .preset-description-card.custom {
+    @apply bg-purple-500/10 border-purple-500/20;
+  }
+  .advanced-settings-toggle {
+    @apply w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-800 transition text-sm text-slate-300 cursor-pointer;
+  }
+  .advanced-settings {
+    @apply mt-4 space-y-3 pt-4 border-t border-slate-800;
+  }
+  .advanced-settings.hidden {
+    @apply hidden;
+  }
+  .estimation-card {
+    @apply p-4 rounded-lg border text-center;
+  }
+  .estimation-value {
+    @apply text-lg font-semibold;
+  }
+  .recipient-summary {
+    @apply flex items-center justify-between mb-4;
+  }
+  .recipient-count-badge {
+    @apply text-sm px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-200;
+  }
+  :root[data-theme='light'] .input-method-toggle {
+    @apply bg-slate-200/50;
+  }
+  :root[data-theme='light'] .input-method-btn:not(.active) {
+    @apply text-slate-500 hover:text-slate-700 hover:bg-slate-200;
+  }
+  :root[data-theme='light'] .csv-dropzone {
+    @apply border-slate-300;
+  }
+  :root[data-theme='light'] .csv-dropzone:hover {
+    @apply border-cyan-400/50 bg-cyan-50;
+  }
