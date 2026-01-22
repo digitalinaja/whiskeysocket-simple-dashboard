@@ -593,7 +593,7 @@ const Groups = {
           : `/media/${message.mediaUrl}`;
 
         if (isImage) {
-          mediaHtml = `<div class="message-media">
+          mediaHtml = `<div class="message-media message-media--image">
             <img class="message-media-image" src="${mediaSrc}" alt="${this.escapeHtml(message.content)}"
                  onclick="window.open(this.src, '_blank')"
                  onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
@@ -610,6 +610,7 @@ const Groups = {
       }
 
       const safeContent = this.escapeHtml(message.content || '');
+      const safeContentHtml = safeContent ? `<div class="bubble-content message-text">${safeContent}</div>` : '';
 
       // Build quoted message preview
       let quotedPreviewHtml = '';
@@ -632,10 +633,10 @@ const Groups = {
           <div class="message ${isIncoming ? 'incoming' : 'outgoing'} group-message compact" data-message-id="${this.escapeHtml(message.messageId)}">
             <div class="message-content-wrapper">
               ${mediaHtml}
-              ${safeContent || quotedPreviewHtml || reactionsHtml ? `
+              ${safeContentHtml || quotedPreviewHtml || reactionsHtml ? `
                 <div class="message-bubble">
                   ${quotedPreviewHtml}
-                  ${safeContent}
+                  ${safeContentHtml}
                   ${reactionsHtml}
                 </div>
               ` : ''}
@@ -669,9 +670,7 @@ const Groups = {
               <div class="message-bubble">
                 ${senderNameHtml}
                 ${quotedPreviewHtml}
-                ${safeContent ? `
-                  <div class="bubble-content">${safeContent}</div>
-                ` : ''}
+                ${safeContentHtml}
                 ${reactionsHtml}
               </div>
             ` : ''}

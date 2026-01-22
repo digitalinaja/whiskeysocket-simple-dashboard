@@ -392,7 +392,7 @@ function renderMessages() {
 
       if (msg.type === 'image') {
         mediaContent = `
-          <div class="message-media">
+          <div class="message-media message-media--image">
             <img class="message-media-image" src="${mediaSrc}" alt="${escapeHtml(msg.content)}"
                  onclick="window.open(this.src, '_blank')"
                  onerror="this.parentElement.innerHTML='<span class=\\'text-muted\\'>Failed to load image</span>'" />
@@ -417,6 +417,8 @@ function renderMessages() {
     } else if (msg.type === 'text' || (!msg.mediaUrl && !mediaContent)) {
       textContent = escapeHtml(msg.content);
     }
+
+    const textContentHtml = textContent ? `<div class="message-text">${textContent}</div>` : '';
 
     // Build quoted message preview
     let quotedPreviewHtml = '';
@@ -449,7 +451,7 @@ function renderMessages() {
         <div class="message-bubble">
           ${quotedPreviewHtml}
           ${!isDeleted ? mediaContent : ''}
-          ${textContent}
+          ${textContentHtml}
           ${reactionsHtml}
           <div class="message-time">
             ${time}
