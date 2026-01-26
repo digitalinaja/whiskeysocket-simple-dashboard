@@ -46,15 +46,35 @@ async function saveMediaLocally(rawMessage, messageId, messageType) {
     let ext = 'bin';
     if (mediaContent.mimetype) {
       const mimeToExt = {
+        // Images
         'image/jpeg': 'jpg',
         'image/png': 'png',
         'image/gif': 'gif',
         'image/webp': 'webp',
+        // Video
         'video/mp4': 'mp4',
+        // Audio
         'audio/mpeg': 'mp3',
         'audio/mp4': 'm4a',
         'audio/ogg': 'ogg',
+        // Documents
         'application/pdf': 'pdf',
+        'application/msword': 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.ms-excel': 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.ms-powerpoint': 'ppt',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+        'text/plain': 'txt',
+        'application/zip': 'zip',
+        'application/x-rar-compressed': 'rar',
+        'application/vnd.ms-word.document.macroEnabled.12': 'docm',
+        'application/vnd.ms-excel.sheet.macroEnabled.12': 'xlsm',
+        'application/vnd.ms-powerpoint.presentation.macroEnabled.12': 'pptm',
+        'application/rtf': 'rtf',
+        'application/vnd.oasis.opendocument.text': 'odt',
+        'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+        'application/vnd.oasis.opendocument.presentation': 'odp',
       };
       ext = mimeToExt[mediaContent.mimetype] || mediaType.substring(0, 3);
     } else {

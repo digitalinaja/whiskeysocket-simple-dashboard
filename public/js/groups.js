@@ -586,6 +586,7 @@ const Groups = {
       if (message.mediaUrl) {
         const isImage = message.type === 'image';
         const isVideo = message.type === 'video';
+        const isDocument = message.type === 'document';
 
         // Determine media source - use API proxy if full URL
         const mediaSrc = message.mediaUrl.startsWith('http')
@@ -606,6 +607,59 @@ const Groups = {
               Your browser does not support the video tag.
             </video>
           </div>`;
+        } else if (isDocument) {
+          // Extract filename from content or use default
+          const fileName = message.content && message.content !== '[Document]' ? message.content : 'Document';
+          const fileExtension = fileName.split('.').pop().toUpperCase();
+          mediaHtml = `
+            <div class="message-media message-media--document" style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              padding: 12px;
+              background: rgba(6, 182, 212, 0.1);
+              border: 1px solid rgba(6, 182, 212, 0.3);
+              border-radius: 8px;
+              cursor: pointer;
+            ">
+              <div style="
+                width: 48px;
+                height: 48px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #06b6d4;
+                border-radius: 8px;
+                font-size: 24px;
+                flex-shrink: 0;
+              ">📄</div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="
+                  font-weight: 500;
+                  color: #e2e8f0;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  margin-bottom: 2px;
+                ">${this.escapeHtml(fileName)}</div>
+                <div style="font-size: 11px; color: #94a3b8;">${fileExtension} Document</div>
+              </div>
+              <a href="${mediaSrc}"
+                 download="${this.escapeHtml(fileName)}"
+                 style="
+                   display: flex;
+                   align-items: center;
+                   justify-content: center;
+                   width: 36px;
+                   height: 36px;
+                   background: #06b6d4;
+                   color: white;
+                   border-radius: 6px;
+                   text-decoration: none;
+                   flex-shrink: 0;
+                 ">⬇️</a>
+            </div>
+          `;
         }
       }
 
