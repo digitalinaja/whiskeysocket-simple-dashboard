@@ -1200,7 +1200,24 @@ app.get("/cloud/sessions/:id/status", authenticateToken, async (req, res) => {
 app.delete("/cloud/sessions/:id", authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
+    // Delete from cloud storage
     await sessionStorage.deleteSessionFromCloud(id);
+
+    // Also delete from database cloud_sessions table
+    try {
+      const connection = (await import('./database.js')).getPool();
+      await connection.query(
+        `DELETE FROM cloud_sessions WHERE session_id = ?`,
+        [id]
+      );
+      console.log(`✓ Deleted cloud session record from database: ${id}`);
+    } catch (dbErr) {
+      // Table might not exist, ignore
+      if (!dbErr.message.includes("doesn't exist")) {
+        console.warn(`Could not delete cloud session from database: ${dbErr.message}`);
+      }
+    }
+
     res.json({ status: "deleted from cloud", sessionId: id });
   } catch (error) {
     console.error('Error deleting cloud session:', error);
@@ -1287,8 +1304,100 @@ app.post("/cloud/sessions/:id/restore", authenticateToken, async (req, res) => {
   }
 });
 
+// Get deletion summary for session
+app.get("/sessions/:id/delete-summary", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const connection = (await import('./database.js')).getPool();
+
+    // Helper function to safely get count
+    const safeGetCount = async (query, params) => {
+      try {
+        const [result] = await connection.query(query, params);
+        return result[0]?.count || 0;
+      } catch (err) {
+        // Table might not exist or other error, return 0
+        console.warn(`Query failed (table might not exist): ${query.substring(0, 50)}... - ${err.message}`);
+        return 0;
+      }
+    };
+
+    // Get counts for each data type (with error handling for missing tables)
+    const summary = {};
+
+    // Group participants
+    summary.groupParticipants = await safeGetCount(
+      `SELECT COUNT(DISTINCT gp.id) as count
+       FROM group_participants gp
+       INNER JOIN whatsapp_groups wg ON gp.group_id = wg.id
+       WHERE wg.session_id = ?`,
+      [id]
+    );
+
+    // Group messages
+    summary.groupMessages = await safeGetCount(
+      `SELECT COUNT(*) as count FROM messages WHERE session_id = ? AND is_group_message = TRUE`,
+      [id]
+    );
+
+    // Groups
+    summary.groups = await safeGetCount(
+      `SELECT COUNT(*) as count FROM whatsapp_groups WHERE session_id = ?`,
+      [id]
+    );
+
+    // Activities
+    summary.activities = await safeGetCount(
+      `SELECT COUNT(*) as count FROM activities WHERE session_id = ?`,
+      [id]
+    );
+
+    // Messages
+    summary.messages = await safeGetCount(
+      `SELECT COUNT(*) as count FROM messages WHERE session_id = ?`,
+      [id]
+    );
+
+    // Contacts
+    summary.contacts = await safeGetCount(
+      `SELECT COUNT(*) as count FROM contacts WHERE session_id = ?`,
+      [id]
+    );
+
+    // Lead statuses
+    summary.leadStatuses = await safeGetCount(
+      `SELECT COUNT(*) as count FROM lead_statuses WHERE session_id = ?`,
+      [id]
+    );
+
+    // Cloud sessions (table might not exist)
+    summary.cloudSession = await safeGetCount(
+      `SELECT COUNT(*) as count FROM cloud_sessions WHERE session_id = ?`,
+      [id]
+    );
+
+    // WhatsApp sessions (session credentials)
+    summary.whatsappSession = await safeGetCount(
+      `SELECT COUNT(*) as count FROM whatsapp_sessions WHERE session_id = ?`,
+      [id]
+    );
+
+    console.log(`📊 Delete summary for session ${id}:`, summary);
+
+    res.json({
+      sessionId: id,
+      summary
+    });
+  } catch (error) {
+    console.error('Error getting delete summary:', error);
+    res.status(500).json({ error: 'Failed to get delete summary', details: error.message });
+  }
+});
+
 app.delete("/sessions/:id", authenticateToken, async (req, res) => {
   const { id } = req.params;
+  const { deleteOptions } = req.body; // { groupParticipants: true, groups: true, etc. }
+
   const session = getSessionOrError(id, res);
   if (!session) return;
   try {
@@ -1302,6 +1411,140 @@ app.delete("/sessions/:id", authenticateToken, async (req, res) => {
     sessions.delete(id);
     clearSessionJobs(id);
     resetAuthDir(id);
+
+    // Delete session data from database based on options
+    try {
+      const connection = (await import('./database.js')).getPool();
+
+      console.log(`🗑️ Deleting database records for session: ${id}`);
+      console.log(`   Delete options:`, deleteOptions);
+
+      const options = deleteOptions || {
+        groupParticipants: true,
+        groupMessages: true,
+        groups: true,
+        activities: true,
+        messages: true,
+        contacts: true,
+        leadStatuses: true,
+        cloudSession: true,
+        whatsappSession: true
+      };
+
+      let deletedItems = [];
+
+      // Delete group participants
+      if (options.groupParticipants) {
+        const [groupsResult] = await connection.query(
+          `SELECT id FROM whatsapp_groups WHERE session_id = ?`,
+          [id]
+        );
+
+        const groupIds = groupsResult.map(g => g.id);
+        if (groupIds.length > 0) {
+          await connection.query(
+            `DELETE FROM group_participants WHERE group_id IN (${groupIds.map(() => '?').join(',')})`,
+            groupIds
+          );
+          deletedItems.push(`✓ Deleted group participants for ${groupIds.length} groups`);
+        }
+      }
+
+      // Delete group messages
+      if (options.groupMessages) {
+        const [result] = await connection.query(
+          `DELETE FROM messages WHERE session_id = ? AND is_group_message = TRUE`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} group messages`);
+      }
+
+      // Delete groups
+      if (options.groups) {
+        const [result] = await connection.query(
+          `DELETE FROM whatsapp_groups WHERE session_id = ?`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} groups`);
+      }
+
+      // Delete activities
+      if (options.activities) {
+        const [result] = await connection.query(
+          `DELETE FROM activities WHERE session_id = ?`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} activities`);
+      }
+
+      // Delete messages
+      if (options.messages) {
+        const [result] = await connection.query(
+          `DELETE FROM messages WHERE session_id = ?`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} messages`);
+      }
+
+      // Delete contacts
+      if (options.contacts) {
+        const [result] = await connection.query(
+          `DELETE FROM contacts WHERE session_id = ?`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} contacts`);
+      }
+
+      // Delete lead statuses
+      if (options.leadStatuses) {
+        const [result] = await connection.query(
+          `DELETE FROM lead_statuses WHERE session_id = ?`,
+          [id]
+        );
+        deletedItems.push(`✓ Deleted ${result.affectedRows} lead statuses`);
+      }
+
+      // Delete from cloud sessions
+      if (options.cloudSession) {
+        try {
+          const [result] = await connection.query(
+            `DELETE FROM cloud_sessions WHERE session_id = ?`,
+            [id]
+          );
+          if (result.affectedRows > 0) {
+            deletedItems.push(`✓ Deleted cloud session record`);
+          }
+        } catch (cloudErr) {
+          if (!cloudErr.message.includes("doesn't exist")) {
+            console.warn(`  ⚠️ Could not delete cloud session: ${cloudErr.message}`);
+          }
+        }
+      }
+
+      // Delete from whatsapp_sessions (session credentials)
+      if (options.whatsappSession) {
+        try {
+          const [result] = await connection.query(
+            `DELETE FROM whatsapp_sessions WHERE session_id = ?`,
+            [id]
+          );
+          if (result.affectedRows > 0) {
+            deletedItems.push(`✓ Deleted WhatsApp session record`);
+          }
+        } catch (waSessionErr) {
+          if (!waSessionErr.message.includes("doesn't exist")) {
+            console.warn(`  ⚠️ Could not delete WhatsApp session: ${waSessionErr.message}`);
+          }
+        }
+      }
+
+      deletedItems.forEach(item => console.log(`  ${item}`));
+      console.log(`✓ Database cleanup complete for session: ${id}`);
+    } catch (dbErr) {
+      console.error("Failed to delete session data from database:", dbErr);
+      // Continue anyway - session is already deleted from memory/files
+    }
+
     io.emit("sessionRemoved", { sessionId: id });
     res.json({ status: "deleted" });
   } catch (err) {
