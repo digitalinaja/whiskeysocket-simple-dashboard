@@ -11,6 +11,72 @@ const __dirname = path.dirname(__filename);
 const MEDIA_BASE_PATH = path.join(__dirname, '../media');
 
 /**
+ * Safely convert Baileys message to JSON (handles Long types from protobuf)
+ * For quoting: Converts Long to a special format that can be restored
+ */
+function safeStringifyMessage(message, indent) {
+  try {
+    // Custom replacer to handle Long and other non-serializable types
+    const seen = new WeakSet();
+    return JSON.stringify(message, (key, value) => {
+      // Handle Long instances (from protobuf)
+      if (value && typeof value === 'object' && value.constructor &&
+          (value.constructor.name === 'Long' ||
+           (value.high !== undefined && value.low !== undefined && value.unsigned !== undefined))) {
+        // Convert Long to a special object format that can be restored later
+        return {
+          __type__: 'Long',
+          value: value.toString ? value.toString() : String(value)
+        };
+      }
+      // Handle Buffer
+      if (value && typeof value === 'object' && Buffer.isBuffer(value)) {
+        return undefined; // Skip buffers
+      }
+      // Handle circular references
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return undefined;
+        }
+        seen.add(value);
+      }
+      return value;
+    }, indent);
+  } catch (error) {
+    console.error('Error stringifying message:', error);
+    // Fallback: store minimal message info
+    return JSON.stringify({
+      key: message.key || {},
+      messageTimestamp: message.messageTimestamp || Date.now(),
+      _error: 'Failed to serialize full message'
+    });
+  }
+}
+
+/**
+ * Restore Long types from special format
+ */
+function restoreLongTypes(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(restoreLongTypes);
+  }
+
+  for (const key in obj) {
+    if (obj[key] && typeof obj[key] === 'object') {
+      if (obj[key].__type__ === 'Long') {
+        // Restore Long (keep as string for now, Baileys will handle it)
+        obj[key] = obj[key].value;
+      } else {
+        obj[key] = restoreLongTypes(obj[key]);
+      }
+    }
+  }
+  return obj;
+}
+
+/**
  * Download and save media file locally
  */
 async function saveMediaLocally(rawMessage, messageId, messageType) {
@@ -289,6 +355,8 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
       }
 
       console.log(`💬 Quoted message detected:`, { quotedMessageId, quotedParticipant, quotedContent });
+    } else {
+      console.log(`ℹ️ No quoted message in contextInfo`);
     }
 
     const msgType = getMessageType(message);
@@ -421,21 +489,97 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
 
     // Check if message already exists (avoid duplicates from history sync)
     const [existing] = await connection.query(
-      `SELECT id FROM messages WHERE message_id = ? AND session_id = ?`,
+      `SELECT id, quoted_message_id, quoted_content FROM messages WHERE message_id = ? AND session_id = ?`,
       [messageId, sessionId]
     );
 
     if (existing.length > 0) {
-      // Message already exists, skip insertion
-      console.log(`⚠️ Duplicate message skipped: ${messageId}`);
+      // Message already exists - check if we need to update quoted message data
+      const existingMessage = existing[0];
+
+      // If this message has quoted data but database doesn't, update it
+      if (quotedMessageId && !existingMessage.quoted_message_id) {
+        console.log(`🔄 Updating existing message with quote data: ${messageId}`);
+        await connection.query(
+          `UPDATE messages SET quoted_message_id = ?, quoted_content = ?, quoted_participant = ? WHERE message_id = ? AND session_id = ?`,
+          [quotedMessageId, quotedContent, quotedParticipant, messageId, sessionId]
+        );
+        console.log(`✓ Quote data updated for existing message: ${messageId}, quoted ID: ${quotedMessageId}`);
+      }
+
+      // For outgoing messages (our own sent messages), ALWAYS emit Socket.io event
+      // even if duplicate, so frontend can display it in real-time
+      if (isFromMe && messageType === 'append') {
+        console.log(`🔄 Re-emitting Socket.io event for outgoing message (duplicate): ${messageId}`);
+
+        const shouldEmit = io && (
+          (!fromMe && messageType === 'notify') ||  // New message from others
+          (fromMe && messageType === 'append')       // Echo of our sent message
+        );
+
+        if (shouldEmit) {
+          console.log(`📡 Preparing to emit Socket.io event chat.newMessage:`, {
+            fromMe,
+            messageType,
+            quotedMessageId,
+            quotedContent,
+            quotedParticipant
+          });
+
+          io.emit('chat.newMessage', {
+            sessionId,
+            message: {
+              id: messageId,
+              messageId: messageId,
+              direction: direction,
+              content: messageContent,
+              type: msgType,
+              mediaUrl: mediaUrl,
+              timestamp: timestamp.toISOString(),
+              reactionEmoji,
+              reactionTargetMessageId,
+              quotedMessageId,
+              quotedContent,
+              quotedParticipant,
+              status: isFromMe ? 'sent' : 'delivered'
+            },
+            contact: {
+              id: contact.id,
+              phone: contact.phone,
+              name: contact.name,
+              source: contact.source,
+              lastInteraction: timestamp.toISOString(),
+              lastMessage: {
+                content: messageContent,
+                timestamp: timestamp.toISOString()
+              },
+              messageCount: (contact.messageCount || 0) + 1
+            }
+          });
+          console.log(`📡 Socket.io emitted: chat.newMessage (fromMe=${fromMe}, type=${messageType}) - RE-EMIT`);
+        }
+      } else {
+        console.log(`⚠️ Duplicate message skipped: ${messageId}`);
+      }
+
       return;
     }
+
+    // Log quote values before inserting
+    console.log(`💾 Saving message to database with quote info:`, {
+      messageId,
+      quotedMessageId,
+      quotedContent,
+      quotedParticipant
+    });
 
     await connection.query(
       `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, reaction_emoji, reaction_target_message_id, quoted_message_id, quoted_content, quoted_participant, raw_message, timestamp, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, reactionEmoji, reactionTargetMessageId, quotedMessageId, quotedContent, quotedParticipant, JSON.stringify(message), timestamp, isFromMe ? 'sent' : 'delivered']
+      [sessionId, contact.id, messageId, direction, msgType, messageContent, mediaUrl, reactionEmoji, reactionTargetMessageId, quotedMessageId, quotedContent, quotedParticipant, safeStringifyMessage(message), timestamp, isFromMe ? 'sent' : 'delivered']
     );
+
+    console.log(`✓ Message saved with quote data - ID: ${messageId}, quoted ID: ${quotedMessageId}`);
 
     // Download and save media locally if it's a media message
     let localMediaPath = null;
@@ -461,11 +605,28 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
     );
 
     // Emit Socket.io event for real-time update (only for new messages, not history sync)
-    if (io && messageType === 'notify') {
+    // Emit for:
+    // - New incoming messages from others (!fromMe && messageType === 'notify')
+    // - Our own outgoing messages (fromMe && messageType === 'append' - these are echoes of our sent messages)
+    const shouldEmit = io && (
+      (!fromMe && messageType === 'notify') ||  // New message from others
+      (fromMe && messageType === 'append')       // Echo of our sent message
+    );
+
+    if (shouldEmit) {
+      console.log(`📡 Preparing to emit Socket.io event chat.newMessage:`, {
+        fromMe,
+        messageType,
+        quotedMessageId,
+        quotedContent,
+        quotedParticipant
+      });
+
       io.emit('chat.newMessage', {
         sessionId,
         message: {
           id: messageId,
+          messageId: messageId,  // Add messageId field for frontend compatibility
           direction: direction,
           content: messageContent,
           type: msgType,
@@ -491,6 +652,7 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
           messageCount: (contact.messageCount || 0) + 1  // Increment message count
         }
       });
+      console.log(`📡 Socket.io emitted: chat.newMessage (fromMe=${fromMe}, type=${messageType})`);
     }
 
     const logPrefix = messageType === 'notify' ? '✓ New message' : '✓ History message';
@@ -719,9 +881,9 @@ async function getOrCreateContact(sessionId, phone, name = null, useLidWorkaroun
 }
 
 /**
- * Send message via WhatsApp (supports text, image, video)
+ * Send message via WhatsApp (supports text, image, video, and quote/reply)
  */
-async function sendMessage(sessionId, sock, phone, content = '', messageType = 'text', mediaOptions = null) {
+async function sendMessage(sessionId, sock, phone, content = '', messageType = 'text', mediaOptions = null, quoteOptions = null) {
   const connection = getPool();
 
   try {
@@ -779,7 +941,58 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
       messageType = 'text';
     }
 
-    const sentMessage = await sock.sendMessage(jid, payload);
+    // Prepare options for sending with quote
+    const sendOptions = {};
+
+    // Variable to store quoted participant (will be used when saving to DB)
+    let quotedParticipantForDB = null;
+
+    // If quote options provided, fetch the quoted message from database
+    if (quoteOptions && quoteOptions.quotedMessageId) {
+      console.log(`💬 Sending message with quote: ${quoteOptions.quotedMessageId}`);
+
+      try {
+        // Get the quoted message from database
+        const table = isGroupMessage ? 'messages' : 'messages'; // Both use same table with is_group_message flag
+        const [quotedMessages] = await connection.query(
+          `SELECT raw_message, message_id, direction, quoted_participant FROM ${table}
+           WHERE message_id = ? AND session_id = ?`,
+          [quoteOptions.quotedMessageId, sessionId]
+        );
+
+        if (quotedMessages.length > 0) {
+          const rawMessage = quotedMessages[0].raw_message;
+          quotedParticipantForDB = quotedMessages[0].quoted_participant; // Store for later use
+
+          if (rawMessage) {
+            try {
+              let quotedMsgObj = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
+
+              // Restore Long types from special format
+              quotedMsgObj = restoreLongTypes(quotedMsgObj);
+
+              // Baileys requires the message object in the 'quoted' option
+              sendOptions.quoted = quotedMsgObj;
+
+              console.log(`✓ Quote message found and attached`);
+              console.log(`   Quote message ID: ${quotedMsgObj.key?.id}`);
+              console.log(`   Quote fromMe: ${quotedMsgObj.key?.fromMe}`);
+              console.log(`   Quote participant: ${quotedParticipantForDB}`);
+            } catch (parseErr) {
+              console.warn(`Failed to parse quoted message: ${parseErr.message}`);
+              console.error(parseErr.stack);
+            }
+          }
+        } else {
+          console.warn(`Quoted message not found in database: ${quoteOptions.quotedMessageId}`);
+        }
+      } catch (dbErr) {
+        console.error(`Error fetching quoted message: ${dbErr.message}`);
+      }
+    }
+
+    const sentMessage = await sock.sendMessage(jid, payload, sendOptions);
+
 
     const timestamp = new Date();
     const messageId = sentMessage.key.id;
@@ -819,11 +1032,29 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
     }
 
     // Build INSERT query dynamically based on whether it's a group message
+    // Extract quoted message data if available
+    let insertQuotedMessageId = null;
+    let insertQuotedContent = null;
+    let insertQuotedParticipant = null;
+
+    if (quoteOptions && quoteOptions.quotedMessageId) {
+      insertQuotedMessageId = quoteOptions.quotedMessageId;
+      insertQuotedContent = quoteOptions.quotedContent || '';
+      insertQuotedParticipant = quotedParticipantForDB; // Use the participant we fetched earlier
+
+      console.log(`💬 Saving sent message with quote:`, {
+        messageId,
+        quotedMessageId: insertQuotedMessageId,
+        quotedContent: insertQuotedContent,
+        quotedParticipant: insertQuotedParticipant
+      });
+    }
+
     if (isGroupMessage && groupId) {
       // Group message with all metadata
       await connection.query(
-        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, quoted_message_id, quoted_content, quoted_participant, raw_message, timestamp, status, is_group_message, group_id, participant_jid, participant_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
           contactId,
@@ -832,7 +1063,10 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
           messageType,
           displayContent,
           mediaUrl,
-          rawPayload ? JSON.stringify(rawPayload) : null,
+          insertQuotedMessageId,
+          insertQuotedContent,
+          insertQuotedParticipant,
+          rawPayload ? safeStringifyMessage(rawPayload) : null,
           timestamp,
           'sent',
           true,
@@ -849,22 +1083,46 @@ async function sendMessage(sessionId, sock, phone, content = '', messageType = '
       );
     } else {
       // Private message (or group without ID yet)
-      await connection.query(
-        `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, raw_message, timestamp, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          sessionId,
-          contactId,
-          messageId,
-          'outgoing',
-          messageType,
-          displayContent,
-          mediaUrl,
-          rawPayload ? JSON.stringify(rawPayload) : null,
-          timestamp,
-          'sent'
-        ]
-      );
+      console.log(`💾 Inserting private message to DB:`, {
+        sessionId,
+        contactId,
+        messageId,
+        messageType,
+        displayContent,
+        hasQuote: !!insertQuotedMessageId,
+        quotedMessageId: insertQuotedMessageId
+      });
+
+      try {
+        await connection.query(
+          `INSERT INTO messages (session_id, contact_id, message_id, direction, message_type, content, media_url, quoted_message_id, quoted_content, quoted_participant, raw_message, timestamp, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            sessionId,
+            contactId,
+            messageId,
+            'outgoing',
+            messageType,
+            displayContent,
+            mediaUrl,
+            insertQuotedMessageId,
+            insertQuotedContent,
+            insertQuotedParticipant,
+            rawPayload ? safeStringifyMessage(rawPayload) : null,
+            timestamp,
+            'sent'
+          ]
+        );
+        console.log(`✓ Private message saved to DB: ${messageId}`);
+      } catch (insertError) {
+        console.error(`❌ Failed to save private message to DB:`, insertError);
+        console.error(`Error details:`, {
+          code: insertError.code,
+          sqlMessage: insertError.sqlMessage,
+          sqlState: insertError.sqlState
+        });
+        throw insertError;
+      }
 
       // Update last_interaction_at for private messages only
       if (!isGroupMessage && contact) {
@@ -1336,7 +1594,7 @@ async function syncContactHistory(sessionId, sock, contactId, phone) {
           quotedMessageId,
           quotedContent,
           quotedParticipant,
-          JSON.stringify(msgData),  // Store full msgData object (includes key, message, etc.)
+          safeStringifyMessage(msgData),  // Store full msgData object (includes key, message, etc.)
           timestamp,
           isFromMe ? 'sent' : 'delivered'
         ]
@@ -1418,7 +1676,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
     console.log(`   - Participant Alt: ${participantAlt}`);
     console.log(`   - Push Name: ${pushName}`);
     console.log(`📋 FULL MESSAGE JSON:`);
-    console.log(JSON.stringify(message, null, 2));
+    console.log(safeStringifyMessage(message, null, 2));
 
     // Upsert group - fetch/update metadata from WhatsApp
     const groupIdWithoutSuffix = remoteJid.replace('@g.us', '');
@@ -1557,6 +1815,8 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       }
 
       console.log(`💬 Group quoted message detected:`, { quotedMessageId, quotedParticipant, quotedContent });
+    } else {
+      console.log(`ℹ️ No quoted message in group message contextInfo`);
     }
 
     // Handle protocolMessage (REVOKE - delete message)
@@ -1642,12 +1902,26 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
 
     // Check if message already exists
     const [existing] = await connection.query(
-      `SELECT id FROM messages WHERE message_id = ? AND session_id = ? AND group_id = ?`,
+      `SELECT id, quoted_message_id, quoted_content FROM messages WHERE message_id = ? AND session_id = ? AND group_id = ?`,
       [messageId, sessionId, group.id]
     );
 
     if (existing.length > 0) {
-      console.log(`⚠️ Duplicate group message skipped: ${messageId}`);
+      // Message already exists - check if we need to update quoted message data
+      const existingMessage = existing[0];
+
+      // If this message has quoted data but database doesn't, update it
+      if (quotedMessageId && !existingMessage.quoted_message_id) {
+        console.log(`🔄 Updating existing group message with quote data: ${messageId}`);
+        await connection.query(
+          `UPDATE messages SET quoted_message_id = ?, quoted_content = ?, quoted_participant = ? WHERE message_id = ? AND session_id = ? AND group_id = ?`,
+          [quotedMessageId, quotedContent, quotedParticipant, messageId, sessionId, group.id]
+        );
+        console.log(`✓ Quote data updated for existing group message: ${messageId}, quoted ID: ${quotedMessageId}`);
+      } else {
+        console.log(`⚠️ Duplicate group message skipped: ${messageId}`);
+      }
+
       return;
     }
 
@@ -1673,7 +1947,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
           quotedMessageId,
           quotedContent,
           quotedParticipant,
-          JSON.stringify(message),
+          safeStringifyMessage(message),
           timestamp,
           fromMe ? 'sent' : 'delivered',
           true,
@@ -1690,6 +1964,9 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
       console.log(`   - Type: ${msgType}`);
       console.log(`   - Direction: ${direction}`);
       console.log(`   - From: ${participantName}`);
+      console.log(`   - Quoted Message ID: ${quotedMessageId}`);
+      console.log(`   - Quoted Content: ${quotedContent}`);
+      console.log(`   - Quoted Participant: ${quotedParticipant}`);
     } catch (insertError) {
       // Ignore duplicate entry errors (message already inserted by sendMessage)
       if (insertError.code === 'ER_DUP_ENTRY') {
@@ -1746,6 +2023,7 @@ async function handleGroupMessage(sessionId, message, sock, io, messageType = 'n
         },
         message: {
           id: messageId,
+          messageId: messageId,  // Add messageId field for frontend compatibility
           direction: direction,
           content: messageContent,
           type: msgType,

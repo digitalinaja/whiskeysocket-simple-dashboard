@@ -531,6 +531,34 @@ const Groups = {
           }
         };
       });
+
+      // Add hover effect for reply buttons
+      container.querySelectorAll('.message-bubble').forEach(bubble => {
+        bubble.addEventListener('mouseenter', () => {
+          const replyBtn = bubble.querySelector('.group-reply-btn');
+          if (replyBtn) {
+            replyBtn.style.opacity = '1';
+          }
+        });
+        bubble.addEventListener('mouseleave', () => {
+          const replyBtn = bubble.querySelector('.group-reply-btn');
+          if (replyBtn) {
+            replyBtn.style.opacity = '0';
+          }
+        });
+      });
+
+      // Add click event listeners for reply buttons
+      container.querySelectorAll('.group-reply-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const messageId = btn.getAttribute('data-message-id');
+          const content = btn.getAttribute('data-content');
+          const type = btn.getAttribute('data-type');
+          this.replyToMessage(messageId, content, type);
+        });
+      });
     } catch (error) {
       console.error('Error rendering messages:', error);
       const errorContainer = document.getElementById('groupMessagesContainer');
@@ -688,7 +716,10 @@ const Groups = {
             <div class="message-content-wrapper">
               ${mediaHtml}
               ${safeContentHtml || quotedPreviewHtml || reactionsHtml ? `
-                <div class="message-bubble">
+                <div class="message-bubble" style="position: relative;">
+                  <button class="message-reply-btn group-reply-btn" data-message-id="${this.escapeHtml(message.messageId)}" data-content="${this.escapeHtml(message.content || '')}" data-type="${this.escapeHtml(message.type || 'text')}" style="position: absolute; top: -30px; right: 0; background: rgba(6, 182, 212, 0.2); border: 1px solid #06b6d4; color: #06b6d4; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.2s; z-index: 10;">
+                    ↩️ Reply
+                  </button>
                   ${quotedPreviewHtml}
                   ${safeContentHtml}
                   ${reactionsHtml}
@@ -721,7 +752,10 @@ const Groups = {
           <div class="message-content-wrapper">
             ${mediaHtml}
             ${safeContent || senderNameHtml || quotedPreviewHtml || reactionsHtml ? `
-              <div class="message-bubble">
+              <div class="message-bubble" style="position: relative;">
+                <button class="message-reply-btn group-reply-btn" data-message-id="${this.escapeHtml(message.messageId)}" data-content="${this.escapeHtml(message.content || '')}" data-type="${this.escapeHtml(message.type || 'text')}" style="position: absolute; top: -30px; right: 0; background: rgba(6, 182, 212, 0.2); border: 1px solid #06b6d4; color: #06b6d4; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.2s; z-index: 10;">
+                  ↩️ Reply
+                </button>
                 ${senderNameHtml}
                 ${quotedPreviewHtml}
                 ${safeContentHtml}
@@ -829,6 +863,14 @@ const Groups = {
     try {
       let response;
 
+      // Prepare quote data if replying to a message
+      const quoteData = {};
+      if (this.replyingTo) {
+        quoteData.quotedMessageId = this.replyingTo.messageId;
+        quoteData.quotedContent = this.replyingTo.content;
+        quoteData.quotedType = this.replyingTo.type;
+      }
+
       if (this.selectedMedia) {
         // Use FormData for media upload
         const formData = new FormData();
@@ -836,6 +878,13 @@ const Groups = {
         formData.append('content', content);
         formData.append('type', this.selectedMedia.type.startsWith('video/') ? 'video' : 'image');
         formData.append('media', this.selectedMedia);
+
+        // Add quote data to form data
+        if (this.replyingTo) {
+          formData.append('quotedMessageId', this.replyingTo.messageId);
+          formData.append('quotedContent', this.replyingTo.content);
+          formData.append('quotedType', this.replyingTo.type);
+        }
 
         response = await fetch(`/api/groups/${this.selectedGroup.id}/messages`, {
           method: 'POST',
@@ -849,7 +898,8 @@ const Groups = {
           body: JSON.stringify({
             sessionId: this.currentSession,
             content: content,
-            type: 'text'
+            type: 'text',
+            ...quoteData
           })
         });
       }
@@ -861,7 +911,11 @@ const Groups = {
         input.value = '';
         this.clearSelectedMedia();
 
-        // Reload messages
+        // Clear reply state
+        this.cancelReply();
+
+        // Optimistic update - reload messages immediately
+        // This ensures quoted messages are displayed right away
         this.loadGroupMessages(this.selectedGroup.id);
       } else {
         this.showError(data.error || 'Failed to send message');
@@ -1295,9 +1349,20 @@ const Groups = {
         direction: newMessage.direction,
         keys: Object.keys(newMessage)
       });
-      this.currentMessages.push(newMessage);
-      this.renderMessages(this.currentMessages);
-      this.scrollToBottom();
+
+      // Check for duplicate to prevent adding same message twice
+      // (can happen when optimistic UI reloads messages, then Socket.io also emits)
+      const exists = this.currentMessages.some(msg =>
+        msg.messageId === newMessage.messageId || msg.id === newMessage.messageId
+      );
+
+      if (!exists) {
+        this.currentMessages.push(newMessage);
+        this.renderMessages(this.currentMessages);
+        this.scrollToBottom();
+      } else {
+        console.log(`⚠️ Duplicate group message skipped (Socket.io): ${newMessage.messageId}`);
+      }
     }
   },
 
@@ -1527,6 +1592,93 @@ const Groups = {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  },
+
+  // Reply to a message
+  replyToMessage(messageId, content, type) {
+    if (!this.selectedGroup) return;
+
+    // Store reply information
+    this.replyingTo = {
+      messageId,
+      content,
+      type
+    };
+
+    // Show quote preview above input
+    this.showReplyPreview(messageId, content, type);
+
+    // Focus on input
+    const input = document.getElementById('groupMessageInput');
+    if (input) {
+      input.focus();
+    }
+  },
+
+  // Show reply preview above message input
+  showReplyPreview(messageId, content, type) {
+    const container = document.getElementById('groupReplyPreviewContainer');
+    if (!container) return;
+
+    // Get icon based on message type
+    let icon = '💬';
+    if (type === 'image') icon = '🖼️';
+    if (type === 'video') icon = '🎞️';
+    if (type === 'document') icon = '📄';
+    if (type === 'audio') icon = '🎵';
+
+    // Format preview text
+    let previewText = content;
+    if (content && content.length > 50) {
+      previewText = content.substring(0, 50) + '...';
+    }
+    if (!previewText) {
+      previewText = type === 'text' ? '[Pesan]' : `[${type}]`;
+    }
+
+    container.innerHTML = `
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(6, 182, 212, 0.1);
+        border-left: 3px solid #06b6d4;
+        border-radius: 4px;
+        margin-bottom: 8px;
+      ">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">${icon} Reply to:</div>
+          <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${this.escapeHtml(previewText)}
+          </div>
+        </div>
+        <button id="cancelGroupReplyBtn" style="
+          background: transparent;
+          border: none;
+          color: #ef4444;
+          cursor: pointer;
+          font-size: 18px;
+          padding: 4px;
+          line-height: 1;
+        ">✕</button>
+      </div>
+    `;
+
+    // Add cancel button event
+    document.getElementById('cancelGroupReplyBtn').addEventListener('click', () => {
+      this.cancelReply();
+    });
+  },
+
+  // Cancel reply
+  cancelReply() {
+    this.replyingTo = null;
+
+    const container = document.getElementById('groupReplyPreviewContainer');
+    if (container) {
+      container.innerHTML = '';
+    }
   },
 
   // Called when navigating to groups view

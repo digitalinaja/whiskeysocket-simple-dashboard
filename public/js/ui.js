@@ -123,6 +123,16 @@ function initSocketIO(socket) {
   socket.on('chat.newMessage', (data) => {
     const { sessionId, message, contact } = data;
 
+    console.log('📨 Socket.io received chat.newMessage:', {
+      sessionId,
+      messageId: message.messageId,
+      direction: message.direction,
+      hasQuote: !!(message.quotedMessageId && message.quotedContent),
+      quotedMessageId: message.quotedMessageId,
+      quotedContent: message.quotedContent,
+      quotedParticipant: message.quotedParticipant
+    });
+
     if (sessionId === chatState.currentSession) {
       chatState.contacts[contact.id] = contact;
 
@@ -140,9 +150,22 @@ function initSocketIO(socket) {
       if (!chatState.messages[contact.id]) {
         chatState.messages[contact.id] = [];
       }
-      chatState.messages[contact.id].push(message);
+
+      // Check for duplicate to prevent adding same message twice
+      // (can happen when optimistic UI reloads messages, then Socket.io also emits)
+      const exists = chatState.messages[contact.id].some(msg =>
+        msg.messageId === message.messageId || msg.id === message.messageId
+      );
+
+      if (!exists) {
+        chatState.messages[contact.id].push(message);
+        console.log(`💾 Message pushed to chatState.messages[${contact.id}], total: ${chatState.messages[contact.id].length}`);
+      } else {
+        console.log(`⚠️ Duplicate message skipped (Socket.io): ${message.messageId}`);
+      }
 
       if (chatState.currentContact?.id === contact.id) {
+        console.log('🎨 Rendering messages for current contact...');
         renderMessages();
         scrollToBottom(document.getElementById('messagesContainer'));
       }

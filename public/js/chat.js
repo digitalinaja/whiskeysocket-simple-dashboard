@@ -264,6 +264,97 @@ async function scrollToQuotedMessage(messageId) {
 }
 
 /**
+ * Reply to a message
+ */
+function replyToMessage(messageId, content, type) {
+  if (!chatState.currentContact) return;
+
+  // Store reply information
+  chatState.replyingTo = {
+    messageId,
+    content,
+    type
+  };
+
+  // Show quote preview above input
+  showReplyPreview(messageId, content, type);
+
+  // Focus on input
+  const input = document.getElementById('messageInput');
+  if (input) {
+    input.focus();
+  }
+}
+
+/**
+ * Show reply preview above message input
+ */
+function showReplyPreview(messageId, content, type) {
+  const container = document.getElementById('replyPreviewContainer');
+  if (!container) return;
+
+  // Get icon based on message type
+  let icon = '💬';
+  if (type === 'image') icon = '🖼️';
+  if (type === 'video') icon = '🎞️';
+  if (type === 'document') icon = '📄';
+  if (type === 'audio') icon = '🎵';
+
+  // Format preview text
+  let previewText = content;
+  if (content && content.length > 50) {
+    previewText = content.substring(0, 50) + '...';
+  }
+  if (!previewText) {
+    previewText = type === 'text' ? '[Pesan]' : `[${type}]`;
+  }
+
+  container.innerHTML = `
+    <div style="
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(6, 182, 212, 0.1);
+      border-left: 3px solid #06b6d4;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    ">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">${icon} Reply to:</div>
+        <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${escapeHtml(previewText)}
+        </div>
+      </div>
+      <button id="cancelReplyBtn" style="
+        background: transparent;
+        border: none;
+        color: #ef4444;
+        cursor: pointer;
+        font-size: 18px;
+        padding: 4px;
+        line-height: 1;
+      ">✕</button>
+    </div>
+  `;
+
+  // Add cancel button event
+  document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
+}
+
+/**
+ * Cancel reply
+ */
+function cancelReply() {
+  chatState.replyingTo = null;
+
+  const container = document.getElementById('replyPreviewContainer');
+  if (container) {
+    container.innerHTML = '';
+  }
+}
+
+/**
  * Show toast notification
  */
 function showToast(message, type = 'info') {
@@ -476,6 +567,12 @@ function renderMessages() {
     // Build quoted message preview
     let quotedPreviewHtml = '';
     if (msg.quotedContent && msg.quotedMessageId) {
+      console.log(`💬 Rendering quoted message in UI:`, {
+        messageId: msg.messageId,
+        quotedMessageId: msg.quotedMessageId,
+        quotedContent: msg.quotedContent,
+        quotedParticipant: msg.quotedParticipant
+      });
       quotedPreviewHtml = `
         <div class="quoted-message-preview"
              data-quoted-id="${escapeHtml(msg.quotedMessageId)}"
@@ -486,6 +583,16 @@ function renderMessages() {
           </div>
         </div>
       `;
+    } else {
+      // Debug log when quoted message is not rendered
+      if (msg.quotedMessageId || msg.quotedContent) {
+        console.log(`⚠️ Quote data exists but not rendering:`, {
+          messageId: msg.messageId,
+          quotedMessageId: msg.quotedMessageId,
+          quotedContent: msg.quotedContent,
+          hasBoth: !!(msg.quotedContent && msg.quotedMessageId)
+        });
+      }
     }
 
     // Build reactions HTML
@@ -501,7 +608,10 @@ function renderMessages() {
 
     return `
       <div class="message ${isOutgoing ? 'outgoing' : 'incoming'} ${isDeleted ? 'deleted' : ''}" data-message-id="${escapeHtml(msg.messageId)}">
-        <div class="message-bubble">
+        <div class="message-bubble" style="position: relative;">
+          <button class="message-reply-btn" data-message-id="${escapeHtml(msg.messageId)}" data-content="${escapeHtml(msg.content || '')}" data-type="${escapeHtml(msg.type || 'text')}" style="position: absolute; top: -30px; right: 0; background: rgba(6, 182, 212, 0.2); border: 1px solid #06b6d4; color: #06b6d4; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.2s;">
+            ↩️ Reply
+          </button>
           ${quotedPreviewHtml}
           ${!isDeleted ? mediaContent : ''}
           ${textContentHtml}
@@ -525,6 +635,34 @@ function renderMessages() {
         scrollToQuotedMessage(quotedId);
       }
     };
+  });
+
+  // Add hover effect for reply buttons
+  container.querySelectorAll('.message-bubble').forEach(bubble => {
+    bubble.addEventListener('mouseenter', () => {
+      const replyBtn = bubble.querySelector('.message-reply-btn');
+      if (replyBtn) {
+        replyBtn.style.opacity = '1';
+      }
+    });
+    bubble.addEventListener('mouseleave', () => {
+      const replyBtn = bubble.querySelector('.message-reply-btn');
+      if (replyBtn) {
+        replyBtn.style.opacity = '0';
+      }
+    });
+  });
+
+  // Add click event listeners for reply buttons
+  container.querySelectorAll('.message-reply-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const messageId = btn.getAttribute('data-message-id');
+      const content = btn.getAttribute('data-content');
+      const type = btn.getAttribute('data-type');
+      replyToMessage(messageId, content, type);
+    });
   });
 }
 
@@ -614,6 +752,14 @@ async function sendMessage() {
   try {
     let responseData;
 
+    // Prepare quote data if replying to a message
+    const quoteData = {};
+    if (chatState.replyingTo) {
+      quoteData.quotedMessageId = chatState.replyingTo.messageId;
+      quoteData.quotedContent = chatState.replyingTo.content;
+      quoteData.quotedType = chatState.replyingTo.type;
+    }
+
     if (hasMedia) {
       const derivedType = mediaFile.type.startsWith('video/') ? 'video' : 'image';
       const formData = new FormData();
@@ -624,6 +770,13 @@ async function sendMessage() {
         formData.append('content', content);
       }
       formData.append('media', mediaFile);
+
+      // Add quote data to form data
+      if (chatState.replyingTo) {
+        formData.append('quotedMessageId', chatState.replyingTo.messageId);
+        formData.append('quotedContent', chatState.replyingTo.content);
+        formData.append('quotedType', chatState.replyingTo.type);
+      }
 
       const res = await fetch('/api/chat/send', {
         method: 'POST',
@@ -638,7 +791,8 @@ async function sendMessage() {
         sessionId: chatState.currentSession,
         phone: chatState.currentContact.phone,
         content,
-        type: 'text'
+        type: 'text',
+        ...quoteData
       });
     }
 
@@ -648,23 +802,16 @@ async function sendMessage() {
       clearSelectedMedia();
     }
 
-    const deliveredMessage = responseData?.message || {
-      id: Date.now(),
-      direction: 'outgoing',
-      type: hasMedia ? (mediaFile.type.startsWith('video/') ? 'video' : 'image') : 'text',
-      content,
-      mediaUrl: null,
-      timestamp: new Date().toISOString(),
-      status: 'sent'
-    };
+    // Clear reply state
+    cancelReply();
 
-    if (!chatState.messages[chatState.currentContact.id]) {
-      chatState.messages[chatState.currentContact.id] = [];
+    // Optimistic update - reload messages to show quoted message
+    // API saves to DB with quote data, so reload will include it
+    if (chatState.currentContact) {
+      await loadContactMessages(chatState.currentContact.id);
+      renderMessages();
+      scrollToBottom(document.getElementById('messagesContainer'));
     }
-    chatState.messages[chatState.currentContact.id].push(deliveredMessage);
-
-    renderMessages();
-    scrollToBottom(document.getElementById('messagesContainer'));
   } catch (err) {
     console.error('Failed to send message:', err);
     alert('Failed to send message: ' + err.message);

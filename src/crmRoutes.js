@@ -346,7 +346,7 @@ router.post('/chat/send', handleMediaUpload, async (req, res) => {
   };
 
   try {
-    const { sessionId, phone } = req.body;
+    const { sessionId, phone, quotedMessageId, quotedContent, quotedType } = req.body;
     let { content = '' } = req.body;
     let type = req.body.type || 'text';
     const hasMedia = Boolean(req.file);
@@ -396,13 +396,22 @@ router.post('/chat/send', handleMediaUpload, async (req, res) => {
         }
       : null;
 
+    // Prepare quote options if provided
+    const quoteOptions = {};
+    if (quotedMessageId && quotedContent) {
+      quoteOptions.quotedMessageId = quotedMessageId;
+      quoteOptions.quotedContent = quotedContent;
+      quoteOptions.quotedType = quotedType || 'text';
+    }
+
     const result = await chatHandlers.sendMessage(
       sessionId,
       session.sock,
       phone,
       content,
       type,
-      mediaPayload
+      mediaPayload,
+      quoteOptions
     );
 
     res.json({ success: true, message: result });
@@ -1029,7 +1038,7 @@ router.post('/groups/:id/messages', handleMediaUpload, async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { sessionId, content = '' } = req.body;
+    const { sessionId, content = '', quotedMessageId, quotedContent, quotedType } = req.body;
     let type = req.body.type || 'text';
     const hasMedia = Boolean(req.file);
 
@@ -1086,6 +1095,14 @@ router.post('/groups/:id/messages', handleMediaUpload, async (req, res) => {
         }
       : null;
 
+    // Prepare quote options if provided
+    const quoteOptions = {};
+    if (quotedMessageId && quotedContent) {
+      quoteOptions.quotedMessageId = quotedMessageId;
+      quoteOptions.quotedContent = quotedContent;
+      quoteOptions.quotedType = quotedType || 'text';
+    }
+
     // Send message to group using the sock
     const result = await chatHandlers.sendMessage(
       sessionId,
@@ -1093,7 +1110,8 @@ router.post('/groups/:id/messages', handleMediaUpload, async (req, res) => {
       group.groupId, // Full JID with @g.us suffix
       content,
       type,
-      mediaPayload
+      mediaPayload,
+      quoteOptions
     );
 
     res.json({ success: true, message: result });
