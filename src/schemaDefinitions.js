@@ -2,7 +2,7 @@
 // Declarative schema definition for all tables, columns, indexes, and constraints
 // Used for validation and migration
 
-export const SCHEMA_VERSION = '1.3.0';
+export const SCHEMA_VERSION = '1.4.0';
 
 export const SCHEMA_DEFINITIONS = {
   contacts: {
@@ -19,7 +19,7 @@ export const SCHEMA_DEFINITIONS = {
       is_blocked: 'BOOLEAN DEFAULT FALSE',
       is_group: 'BOOLEAN DEFAULT FALSE',
       group_subject: 'VARCHAR(255) NULL',
-      source: "ENUM('whatsapp','google','both') DEFAULT 'whatsapp'",
+      source: "ENUM('whatsapp','google','outlook','both') DEFAULT 'whatsapp'",
       contact_type: "ENUM('student_parent','prospect_parent','alumni_parent','external') DEFAULT 'external'",
       external_student_ids: 'JSON NULL COMMENT "Array of student IDs from external systems"',
       external_student_source: 'VARCHAR(100) NULL COMMENT "Source system: student_db_app, etc."',
@@ -27,6 +27,7 @@ export const SCHEMA_DEFINITIONS = {
       ticketing_app_link: 'VARCHAR(500) NULL COMMENT "Link to ticketing app record"',
       linked_group_ids: 'JSON NULL COMMENT "Array of linked WhatsApp group IDs"',
       google_contact_id: 'VARCHAR(255) NULL',
+      outlook_contact_id: 'VARCHAR(255) NULL',
       lead_status_id: 'INT NULL',
       created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
       updated_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
@@ -39,6 +40,7 @@ export const SCHEMA_DEFINITIONS = {
       { name: 'idx_whatsapp_lid', columns: ['whatsapp_lid'] },
       { name: 'idx_last_interaction', columns: ['last_interaction_at'] },
       { name: 'idx_google_contact', columns: ['google_contact_id'] },
+      { name: 'idx_outlook_contact', columns: ['outlook_contact_id'] },
       { name: 'idx_is_group', columns: ['is_group'] },
       { name: 'idx_contact_type', columns: ['contact_type'] },
       { name: 'idx_contact_type_session', columns: ['session_id', 'contact_type'] },
@@ -155,6 +157,23 @@ export const SCHEMA_DEFINITIONS = {
       session_id: 'VARCHAR(255) NOT NULL',
       access_token: 'TEXT NOT NULL',
       refresh_token: 'TEXT NOT NULL',
+      token_type: "VARCHAR(50) DEFAULT 'Bearer'",
+      expiry_date: 'TIMESTAMP NULL',
+      scope: 'TEXT NULL',
+      created_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      updated_at: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+    },
+    indexes: [
+      { name: 'unique_session', columns: ['session_id'], unique: true },
+      { name: 'idx_session', columns: ['session_id'] },
+    ],
+  },
+  outlook_tokens: {
+    columns: {
+      id: 'INT AUTO_INCREMENT PRIMARY KEY',
+      session_id: 'VARCHAR(255) NOT NULL',
+      access_token: 'TEXT NOT NULL',
+      refresh_token: 'TEXT NULL',
       token_type: "VARCHAR(50) DEFAULT 'Bearer'",
       expiry_date: 'TIMESTAMP NULL',
       scope: 'TEXT NULL',

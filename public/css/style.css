@@ -355,6 +355,13 @@
   .google-status,
   .google-notice {
     @apply mt-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-300;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .sync-actions {
+    @apply flex items-center gap-2;
   }
   .contact-card-header {
     @apply flex items-center gap-3;

@@ -16,6 +16,7 @@ async function loadCRMData(sessionId) {
   ]);
 
   checkGoogleConnection();
+  checkOutlookConnection();
 }
 
 /**
@@ -681,6 +682,28 @@ async function checkGoogleConnection() {
 }
 
 /**
+ * Check Outlook/Office 365 connection
+ */
+async function checkOutlookConnection() {
+  if (!crmState.currentSession) return;
+
+  try {
+    const res = await fetch(`/api/outlook/sync-status?sessionId=${crmState.currentSession}`);
+    const data = await res.json();
+
+    if (data.connected) {
+      document.getElementById('outlookStatus').style.display = 'flex';
+      document.getElementById('outlookNotConnected').style.display = 'none';
+    } else {
+      document.getElementById('outlookStatus').style.display = 'none';
+      document.getElementById('outlookNotConnected').style.display = 'flex';
+    }
+  } catch (err) {
+    console.error('Failed to check Outlook connection:', err);
+  }
+}
+
+/**
  * Initialize CRM functionality
  */
 function initCRM() {
@@ -740,7 +763,7 @@ function initCRM() {
       alert('Failed to sync Google contacts: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = '📇 Sync Google Contacts';
+      btn.textContent = '📇 Sync';
     }
   });
 
@@ -774,6 +797,64 @@ function initCRM() {
     } finally {
       btn.disabled = false;
       btn.textContent = '📱 Sync WhatsApp';
+    }
+  });
+
+  // Outlook/Office 365 handlers
+  document.getElementById('connectOutlookBtn')?.addEventListener('click', () => {
+    if (!crmState.currentSession) {
+      alert('Please select a session first');
+      return;
+    }
+    window.location.href = `/auth/microsoft?session=${encodeURIComponent(crmState.currentSession)}`;
+  });
+
+  document.getElementById('disconnectOutlookBtn')?.addEventListener('click', async () => {
+    if (!crmState.currentSession) return;
+
+    try {
+      const res = await fetch('/api/outlook/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: crmState.currentSession })
+      });
+
+      if (res.ok) checkOutlookConnection();
+    } catch (err) {
+      console.error('Failed to disconnect Outlook:', err);
+    }
+  });
+
+  document.getElementById('syncOutlookBtn')?.addEventListener('click', async () => {
+    if (!crmState.currentSession) {
+      alert('Please select a session first');
+      return;
+    }
+
+    const btn = document.getElementById('syncOutlookBtn');
+    btn.disabled = true;
+    btn.textContent = '🔄 Syncing...';
+
+    try {
+      const res = await fetch('/api/outlook/sync-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: crmState.currentSession })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Successfully synced ${data.synced || 0} new, ${data.updated || 0} updated, ${data.merged || 0} merged contacts!`);
+        await loadCRMContacts(crmState.currentSession);
+      } else {
+        alert('Failed to sync: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Failed to sync Outlook contacts: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📧 Sync';
     }
   });
 

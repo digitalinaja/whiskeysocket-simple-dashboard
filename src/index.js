@@ -11,6 +11,7 @@ import initSocket from "./socket.js";
 import { initDatabase, testConnection, createDefaultLeadStatuses } from "./database.js";
 import * as chatHandlers from "./chatHandlers.js";
 import * as googleContacts from "./googleContacts.js";
+import * as outlookContacts from "./outlookContacts.js";
 import * as sessionStorage from "./sessionStorage.js";
 import crmRoutes from "./crmRoutes.js";
 import { authenticateToken, checkAuthStatus } from "./authMiddleware.js";
@@ -210,6 +211,93 @@ app.post('/api/google/disconnect', authenticateToken, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error disconnecting Google:', error);
+    res.status(500).json({ error: 'Failed to disconnect' });
+  }
+});
+
+// Microsoft/Outlook OAuth routes
+app.get('/auth/microsoft', (req, res) => {
+  const { session } = req.query;
+  const authUrl = outlookContacts.getAuthUrl(session || 'default');
+  res.redirect(authUrl);
+});
+
+app.get('/auth/microsoft/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code) {
+    return res.status(400).send('Authorization failed: No code received');
+  }
+
+  try {
+    const sessionId = state || 'default';
+
+    if (!sessionId || sessionId === 'undefined') {
+      console.error('Invalid sessionId from OAuth state:', state);
+      return res.status(400).send('Authorization failed: Invalid session');
+    }
+
+    await outlookContacts.handleOAuthCallback(code, sessionId);
+    res.redirect('/#contacts');
+  } catch (error) {
+    console.error('Microsoft OAuth callback error:', error);
+    res.status(500).send('Authentication failed: ' + error.message);
+  }
+});
+
+// Microsoft/Outlook sync API routes (protected)
+app.get('/api/outlook/sync-status', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connected = await outlookContacts.isConnected(sessionId);
+    res.json({ connected });
+  } catch (error) {
+    console.error('Error checking Outlook sync status:', error);
+    res.status(500).json({ error: 'Failed to check sync status' });
+  }
+});
+
+app.post('/api/outlook/sync-contacts', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const result = await outlookContacts.syncContactsFromOutlook(sessionId);
+
+    // Emit Socket.io event for real-time update
+    io.emit('outlook.contactsSynced', { sessionId, count: result.synced + result.merged + result.updated });
+
+    res.json({
+      success: true,
+      synced: result.synced,
+      updated: result.updated,
+      merged: result.merged,
+      skipped: result.skipped,
+      total: result.total
+    });
+  } catch (error) {
+    console.error('Error syncing Outlook contacts:', error);
+    res.status(500).json({ error: 'Failed to sync contacts', details: error.message });
+  }
+});
+
+app.post('/api/outlook/disconnect', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    await outlookContacts.disconnectMicrosoft(sessionId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error disconnecting Outlook:', error);
     res.status(500).json({ error: 'Failed to disconnect' });
   }
 });

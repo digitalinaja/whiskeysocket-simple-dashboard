@@ -864,18 +864,31 @@
             <div class="contact-count" id="crmContactCount">0 contacts</div>
             <div class="sync-buttons">
               <button id="syncWhatsAppBtn" class="btn-ghost">📱 Sync WhatsApp</button>
-              <button id="syncGoogleBtn" class="btn-ghost">📇 Sync Google Contacts</button>
             </div>
           </div>
           <div id="googleStatus" class="google-status" style="display: none;">
             <span id="googleConnectionStatus">✅ Connected to Google</span>
-            <button id="disconnectGoogleBtn" class="btn-ghost btn-sm">Disconnect</button>
+            <div class="sync-actions">
+              <button id="syncGoogleBtn" class="btn-ghost btn-sm">📇 Sync</button>
+              <button id="disconnectGoogleBtn" class="btn-ghost btn-sm">Disconnect</button>
+            </div>
           </div>
           <div id="googleNotConnected" class="google-notice" style="display: none;">
             <span>📇 Google Contacts not connected</span>
-            <button id="connectGoogleBtn" class="btn-sm btn-primary">Connect Google</button>
+            <button id="connectGoogleBtn" class="btn-sm btn-primary">Connect</button>
           </div>
-          <div class="contacts-cards" id="crmContactsCards">
+          <div id="outlookStatus" class="google-status" style="display: none;">
+            <span id="outlookConnectionStatus">✅ Connected to Outlook</span>
+            <div class="sync-actions">
+              <button id="syncOutlookBtn" class="btn-ghost btn-sm">📧 Sync</button>
+              <button id="disconnectOutlookBtn" class="btn-ghost btn-sm">Disconnect</button>
+            </div>
+          </div>
+          <div id="outlookNotConnected" class="google-notice" style="display: none;">
+            <span>📧 Outlook not connected</span>
+            <button id="connectOutlookBtn" class="btn-sm btn-primary">Connect</button>
+          </div>
+          <div class="contacts-cards mt-3" id="crmContactsCards">
             <div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 40px;">
               Loading contacts...
             </div>
