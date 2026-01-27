@@ -55,9 +55,13 @@ async function loadCRMContacts(sessionId) {
       }
       renderCRMContacts(data.contacts);
       renderPagination();
+    } else {
+      console.error('Failed to load CRM contacts:', data.error || data.message);
+      alert(`Gagal memuat contacts: ${data.error || data.message || 'Unknown error'}`);
     }
   } catch (err) {
     console.error('Failed to load CRM contacts:', err);
+    alert('Gagal memuat contacts. Silakan coba lagi atau hubungi admin.');
   }
 }
 

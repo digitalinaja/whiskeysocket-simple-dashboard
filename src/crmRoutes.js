@@ -102,7 +102,7 @@ router.get('/contacts', async (req, res) => {
       const searchTerm = search.trim().toLowerCase();
 
       // Normalize phone number if search looks like a phone number
-      const normalizedPhone = require('./chatHandlers').normalizePhoneNumber(searchTerm);
+      const normalizedPhone = chatHandlers.normalizePhoneNumber(searchTerm);
       const phoneSearch = normalizedPhone || searchTerm;
 
       // Search in multiple fields with case-insensitive matching
@@ -179,7 +179,8 @@ router.get('/contacts', async (req, res) => {
 
     const totalPages = Math.ceil(total / limitVal);
 
-    res.json({
+    res.status(200).json({
+      success: true,
       contacts: contacts.map(c => ({
         id: c.id,
         sessionId: c.session_id,
@@ -222,7 +223,12 @@ router.get('/contacts', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching contacts:', error);
-    res.status(500).json({ error: 'Failed to fetch contacts' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Failed to fetch contacts',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
