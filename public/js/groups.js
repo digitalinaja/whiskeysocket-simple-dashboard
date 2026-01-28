@@ -313,9 +313,15 @@ const Groups = {
       }
     });
 
-    // Show chat conversation
-    document.getElementById('groupChatWelcome').style.display = 'none';
-    document.getElementById('groupConversation').style.display = 'flex';
+    // Show chat conversation if the containers exist
+    const groupChatWelcome = document.getElementById('groupChatWelcome');
+    if (groupChatWelcome) {
+      groupChatWelcome.style.display = 'none';
+    }
+    const groupConversation = document.getElementById('groupConversation');
+    if (groupConversation) {
+      groupConversation.style.display = 'flex';
+    }
 
     // Fetch fresh group info to get accurate participant count
     try {
@@ -332,8 +338,14 @@ const Groups = {
     }
 
     // Update group info in header
-    document.getElementById('groupChatName').textContent = group.subject;
-    document.getElementById('groupChatMeta').textContent = `👤 ${group.participantCount || 0} members • ${this.getCategoryIcon(group.category)} ${this.capitalizeFirst(group.category)}`;
+    const groupChatNameEl = document.getElementById('groupChatName');
+    if (groupChatNameEl) {
+      groupChatNameEl.textContent = group.subject;
+    }
+    const groupChatMetaEl = document.getElementById('groupChatMeta');
+    if (groupChatMetaEl) {
+      groupChatMetaEl.textContent = `👤 ${group.participantCount || 0} members • ${this.getCategoryIcon(group.category)} ${this.capitalizeFirst(group.category)}`;
+    }
 
     // Load messages
     this.loadGroupMessages(groupId);
@@ -1477,8 +1489,14 @@ const Groups = {
       `;
     }
 
-    document.getElementById('groupChatWelcome').style.display = 'flex';
-    document.getElementById('groupConversation').style.display = 'none';
+    const groupChatWelcomeEl = document.getElementById('groupChatWelcome');
+    if (groupChatWelcomeEl) {
+      groupChatWelcomeEl.style.display = 'flex';
+    }
+    const groupConversationEl = document.getElementById('groupConversation');
+    if (groupConversationEl) {
+      groupConversationEl.style.display = 'none';
+    }
   },
 
   // Show error

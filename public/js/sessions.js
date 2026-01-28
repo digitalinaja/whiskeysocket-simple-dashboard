@@ -386,6 +386,10 @@ function initSessions() {
   document.getElementById('chatSessionSelect')?.addEventListener('change', (e) => {
     chatState.currentSession = e.target.value;
     if (e.target.value) {
+      // Clear filters when switching sessions
+      if (typeof clearChatFilters === 'function') {
+        clearChatFilters();
+      }
       loadChatContacts(chatState.currentSession);
     }
   });

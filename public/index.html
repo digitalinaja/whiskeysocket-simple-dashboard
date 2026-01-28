@@ -664,6 +664,18 @@
             <div class="search-box">
               <input type="text" id="chatSearchInput" placeholder="Search contacts...">
             </div>
+            <div class="chat-filters">
+              <div class="filter-row">
+                <select id="chatStatusFilter" class="filter-select">
+                  <option value="">All Statuses</option>
+                </select>
+              </div>
+              <div class="filter-tags" id="chatTagsFilter">
+                <!-- Tags will be rendered here -->
+                <div class="filter-tags-placeholder">Loading tags...</div>
+              </div>
+              <button type="button" id="clearChatFilters" class="btn-sm" style="margin-top: 8px; width: 100%; display: none;">Clear Filters</button>
+            </div>
           </div>
           <div class="contacts-list" id="chatContactsList">
             <div class="loading-contacts">Loading contacts...</div>
@@ -739,70 +751,69 @@
             <div class="search-box">
               <input type="text" id="groupsSearchInput" placeholder="Search groups...">
             </div>
+            <div class="chat-filters">
+              <div class="filter-row">
+                <select id="groupsCategoryFilter" class="filter-select">
+                  <option value="">All Categories</option>
+                  <option value="business">📱 Business</option>
+                  <option value="internal">🏢 Internal</option>
+                  <option value="personal">👤 Personal</option>
+                </select>
+              </div>
+              <div class="category-tabs">
+                <button class="category-tab active" data-category="all">💼 All (<span id="categoryCountAll">0</span>)</button>
+                <button class="category-tab" data-category="business">💼 Business (<span id="categoryCountBusiness">0</span>)</button>
+                <button class="category-tab" data-category="internal">👔 Internal (<span id="categoryCountInternal">0</span>)</button>
+                <button class="category-tab" data-category="personal">🏠 Personal (<span id="categoryCountPersonal">0</span>)</button>
+              </div>
+            </div>
           </div>
-
-          <!-- Category Tabs -->
-          <div class="category-tabs">
-            <button class="category-tab active" data-category="all">
-              <span class="tab-icon">📚</span>
-              <span class="tab-label">All</span>
-              <span class="tab-count" id="categoryCountAll">0</span>
-            </button>
-            <button class="category-tab" data-category="business">
-              <span class="tab-icon">💼</span>
-              <span class="tab-label">Business</span>
-              <span class="tab-count" id="categoryCountBusiness">0</span>
-            </button>
-            <button class="category-tab" data-category="internal">
-              <span class="tab-icon">👔</span>
-              <span class="tab-label">Internal</span>
-              <span class="tab-count" id="categoryCountInternal">0</span>
-            </button>
-            <button class="category-tab" data-category="personal">
-              <span class="tab-icon">🏠</span>
-              <span class="tab-label">Personal</span>
-              <span class="tab-count" id="categoryCountPersonal">0</span>
-            </button>
-          </div>
-
-          <!-- Groups List -->
           <div class="contacts-list" id="groupsList">
             <div class="loading-contacts">Loading groups...</div>
           </div>
         </div>
 
-        <!-- Group Chat Window -->
         <div class="chat-window">
           <div id="groupChatWelcome" class="chat-welcome">
             <div class="welcome-icon">👥</div>
             <h3>Welcome to Groups</h3>
             <p>Select a group to start messaging</p>
+            <div class="quick-stats">
+              <div class="stat-item">
+                <span class="stat-value" id="totalGroupsCount">0</span>
+                <span class="stat-label">Total Groups</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" id="businessGroupsCount">0</span>
+                <span class="stat-label">Business</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" id="unreadGroupsCount">0</span>
+                <span class="stat-label">Unread</span>
+              </div>
+            </div>
           </div>
 
           <div id="groupConversation" class="chat-conversation" style="display: none;">
-            <!-- Group Chat Header -->
-            <div class="chat-window-header">
-              <div class="contact-info">
-                <div class="contact-avatar" id="groupChatAvatar">👥</div>
-                <div class="contact-details">
-                  <div class="contact-name" id="groupChatName">-</div>
-                  <div class="contact-phone" id="groupChatMeta">👤 0 members • 💼 Business</div>
+            <div class="chat-window-header group-header">
+              <div class="group-info">
+                <div class="group-avatar" id="groupChatAvatar">👥</div>
+                <div class="group-details">
+                  <div class="group-name" id="groupChatName">-</div>
+                  <div class="group-meta" id="groupChatMeta">Select a group to view info</div>
                 </div>
               </div>
               <div class="chat-actions">
+                <button class="btn-icon" id="refreshGroupChatBtn" title="Refresh group chat">🔄</button>
                 <button class="btn-icon" id="viewParticipantsBtn" title="View Participants">👥</button>
-                <button class="btn-icon" id="refreshGroupChatBtn" title="Sync Chat History">🔄</button>
               </div>
             </div>
 
-            <!-- Messages Container -->
             <div class="messages-container" id="groupMessagesContainer">
-              <!-- Group messages will be rendered here -->
+              <div class="loading-contacts">Select a group to load messages</div>
             </div>
 
-            <!-- Message Input -->
             <div class="message-input-area">
-              <div id="groupReplyPreviewContainer"></div>
               <div class="message-input-wrapper">
                 <button type="button" id="attachGroupMediaBtn" class="btn-icon attach-media-btn" title="Attach image or video">📎</button>
                 <textarea id="groupMessageInput" placeholder="Type a message to group..." rows="1"></textarea>

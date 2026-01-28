@@ -3,6 +3,161 @@
 // ============================================
 
 /**
+ * Chat filter state management
+ */
+const chatFilters = {
+  status: '',
+  tags: [], // Array of tag IDs,
+  
+  reset() {
+    this.status = '';
+    this.tags = [];
+  },
+  
+  hasFilters() {
+    return this.status !== '' || this.tags.length > 0;
+  },
+  
+  toQueryParams() {
+    const params = {};
+    if (this.status) {
+      params.statusId = this.status;
+    }
+    if (this.tags.length > 0) {
+      params.tagIds = this.tags.join(',');
+    }
+    return params;
+  }
+};
+
+/**
+ * Render chat status filter dropdown
+ */
+function renderChatStatusFilter() {
+  const select = document.getElementById('chatStatusFilter');
+  const statuses = Object.values(crmState.leadStatuses);
+
+  const currentValue = chatFilters.status;
+
+  select.innerHTML = '<option value="">All Statuses</option>' +
+    statuses.map(s => `<option value="${s.id}" ${s.id === currentValue ? 'selected' : ''}>${s.name}</option>`).join('');
+
+  // Remove existing listener and add new one
+  const newSelect = select.cloneNode(true);
+  select.parentNode.replaceChild(newSelect, select);
+  
+  newSelect.addEventListener('change', (e) => {
+    chatFilters.status = e.target.value;
+    updateClearFiltersButton();
+    // Reload contacts with new filters
+    loadChatContacts(chatState.currentSession, document.getElementById('chatSearchInput').value);
+  });
+
+  document.getElementById('chatStatusFilter').id = 'chatStatusFilter';
+}
+
+/**
+ * Render chat tags filter
+ */
+function renderChatTagsFilter() {
+  const container = document.getElementById('chatTagsFilter');
+  const tags = Object.values(crmState.tags);
+
+  if (tags.length === 0) {
+    container.innerHTML = '<div class="filter-tags-placeholder">No tags available</div>';
+    return;
+  }
+
+  const selectedTagIds = new Set(chatFilters.tags);
+
+  container.innerHTML = `
+    <div class="tag-filter-controls">
+      <input type="text" id="chatTagFilterSearch" class="tag-filter-search" placeholder="Search tags..." style="flex:1;">
+      <button type="button" id="clearChatTagFilters" class="tag-filter-clear" ${selectedTagIds.size ? '' : 'disabled'}>Clear</button>
+    </div>
+    <div class="tag-filter-chips" id="chatTagFilterChipList">
+      ${tags.map(tag => `
+        <button type="button"
+          class="filter-tag-chip ${selectedTagIds.has(tag.id) ? 'active' : ''}"
+          data-tag-id="${tag.id}"
+          data-tag-name="${escapeHtml(tag.name)}"
+          style="--chip-color:${tag.color};">
+          <span class="filter-tag-dot" style="background:${tag.color}"></span>
+          ${escapeHtml(tag.name)}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const chipList = container.querySelector('#chatTagFilterChipList');
+  chipList?.querySelectorAll('.filter-tag-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const id = parseInt(chip.dataset.tagId, 10);
+      if (!id) return;
+
+      if (selectedTagIds.has(id)) {
+        selectedTagIds.delete(id);
+        chip.classList.remove('active');
+      } else {
+        selectedTagIds.add(id);
+        chip.classList.add('active');
+      }
+
+      chatFilters.tags = Array.from(selectedTagIds);
+      updateClearFiltersButton();
+      // Reload contacts with new filters
+      loadChatContacts(chatState.currentSession, document.getElementById('chatSearchInput').value);
+
+      const clearBtn = container.querySelector('#clearChatTagFilters');
+      if (clearBtn) {
+        clearBtn.disabled = selectedTagIds.size === 0;
+      }
+    });
+  });
+
+  container.querySelector('#clearChatTagFilters')?.addEventListener('click', () => {
+    if (!selectedTagIds.size) return;
+    chatFilters.tags = [];
+    renderChatTagsFilter();
+    updateClearFiltersButton();
+    loadChatContacts(chatState.currentSession, document.getElementById('chatSearchInput').value);
+  });
+
+  container.querySelector('#chatTagFilterSearch')?.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    chipList?.querySelectorAll('.filter-tag-chip').forEach(chip => {
+      const name = chip.dataset.tagName?.toLowerCase() || '';
+      chip.style.display = name.includes(term) ? '' : 'none';
+    });
+  });
+}
+
+/**
+ * Update clear filters button visibility
+ */
+function updateClearFiltersButton() {
+  const clearBtn = document.getElementById('clearChatFilters');
+  if (!clearBtn) return;
+  
+  if (chatFilters.hasFilters()) {
+    clearBtn.style.display = 'block';
+  } else {
+    clearBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Clear all chat filters
+ */
+function clearChatFilters() {
+  chatFilters.reset();
+  renderChatStatusFilter();
+  renderChatTagsFilter();
+  updateClearFiltersButton();
+  loadChatContacts(chatState.currentSession, document.getElementById('chatSearchInput').value);
+}
+
+/**
  * Ensure CRM data is loaded for current session
  */
 async function ensureCRMDataLoaded(sessionId) {
@@ -12,6 +167,9 @@ async function ensureCRMDataLoaded(sessionId) {
   if (crmState.currentSession === sessionId && 
       Object.keys(crmState.leadStatuses).length > 0 && 
       Object.keys(crmState.tags).length > 0) {
+    // Render filters if data is already loaded
+    renderChatStatusFilter();
+    renderChatTagsFilter();
     return true;
   }
 
@@ -21,6 +179,9 @@ async function ensureCRMDataLoaded(sessionId) {
       loadCRMTags(sessionId),
       loadCRMLeadStatuses(sessionId)
     ]);
+    // Render filters after loading
+    renderChatStatusFilter();
+    renderChatTagsFilter();
     return true;
   } catch (err) {
     console.error('Failed to load CRM data:', err);
@@ -39,6 +200,12 @@ async function loadChatContacts(sessionId, search = '') {
       sessionId,
       search,
       limit: '50'
+    });
+
+    // Add filter parameters if any
+    const filterParams = chatFilters.toQueryParams();
+    Object.entries(filterParams).forEach(([key, value]) => {
+      params.set(key, value);
     });
 
     const res = await fetch(`/api/contacts?${params}`);
@@ -890,6 +1057,11 @@ function initChat() {
     chatSearchTimeout = setTimeout(() => {
       loadChatContacts(chatState.currentSession, e.target.value);
     }, 300);
+  });
+
+  // Clear Chat Filters button
+  document.getElementById('clearChatFilters')?.addEventListener('click', () => {
+    clearChatFilters();
   });
 
   document.getElementById('sendMessageBtn')?.addEventListener('click', sendMessage);

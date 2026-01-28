@@ -1208,3 +1208,4 @@
   :root[data-theme='light'] .csv-dropzone:hover {
     @apply border-cyan-400/50 bg-cyan-50;
   }
+}
