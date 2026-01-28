@@ -353,6 +353,7 @@ async function showContactDetailModal(contactId, sessionId = null) {
     await loadCRMLeadStatuses(activeSessionId);
   }
 
+  // Fetch fresh contact data from server
   try {
     const res = await fetch(`/api/contacts/${contactId}?sessionId=${activeSessionId}`);
     const data = await res.json();
@@ -548,6 +549,11 @@ async function updateContactStatus(contactId, statusId) {
     if (res.ok) {
       alert('Status updated!');
       await loadCRMContacts(crmState.currentSession);
+      
+      // Also refresh chat contacts list if available
+      if (typeof loadChatContacts === 'function' && crmState.currentSession) {
+        await loadChatContacts(crmState.currentSession);
+      }
     } else {
       console.error('Status update failed:', data.error || data.message);
       alert('Failed to update status: ' + (data.error || data.message));
@@ -650,6 +656,11 @@ async function assignTagToContact(contactId, { tagId, name, color }) {
 
     await showContactDetailModal(contactId, crmState.currentSession);
     await loadCRMContacts(crmState.currentSession);
+    
+    // Also refresh chat contacts list if available
+    if (typeof loadChatContacts === 'function' && crmState.currentSession) {
+      await loadChatContacts(crmState.currentSession);
+    }
   } catch (err) {
     alert(err.message || 'Failed to assign tag');
   }
@@ -877,11 +888,21 @@ function initCRM() {
   // Modal close handlers
   document.getElementById('closeContactModal')?.addEventListener('click', () => {
     document.getElementById('contactDetailModal').classList.remove('active');
+    
+    // Refresh chat contacts list if in chat view to show updated status/tags
+    if (crmState.currentSession) {
+      loadChatContacts(crmState.currentSession);
+    }
   });
 
   document.getElementById('contactDetailModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'contactDetailModal') {
       e.target.classList.remove('active');
+      
+      // Refresh chat contacts list if in chat view to show updated status/tags
+      if (crmState.currentSession) {
+        loadChatContacts(crmState.currentSession);
+      }
     }
   });
 }

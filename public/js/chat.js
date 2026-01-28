@@ -3,6 +3,32 @@
 // ============================================
 
 /**
+ * Ensure CRM data is loaded for current session
+ */
+async function ensureCRMDataLoaded(sessionId) {
+  if (!sessionId) return false;
+
+  // Check if CRM data for this session is already loaded
+  if (crmState.currentSession === sessionId && 
+      Object.keys(crmState.leadStatuses).length > 0 && 
+      Object.keys(crmState.tags).length > 0) {
+    return true;
+  }
+
+  // Load CRM data if not already loaded
+  try {
+    await Promise.all([
+      loadCRMTags(sessionId),
+      loadCRMLeadStatuses(sessionId)
+    ]);
+    return true;
+  } catch (err) {
+    console.error('Failed to load CRM data:', err);
+    return false;
+  }
+}
+
+/**
  * Load chat contacts
  */
 async function loadChatContacts(sessionId, search = '') {
@@ -26,6 +52,9 @@ async function loadChatContacts(sessionId, search = '') {
     });
 
     renderChatContactsList();
+    
+    // Ensure CRM data is loaded for all contacts
+    await ensureCRMDataLoaded(sessionId);
   } catch (err) {
     console.error('Failed to load contacts:', err);
   }
@@ -52,12 +81,40 @@ function renderChatContactsList() {
     const lastMsg = contact.lastMessage;
     const time = lastMsg ? formatMessageTime(lastMsg.timestamp) : '';
 
+    // Get lead status from contact if available
+    const status = contact.leadStatus || crmState.leadStatuses[contact.leadStatusId];
+    const statusMarkup = status
+      ? `<span class="lead-status-pill" style="--status-color:${status.color}; font-size: 10px; padding: 2px 6px; display: inline-block; margin-top: 4px;">${status.name}</span>`
+      : '';
+
+    // Get tags from contact - handle both tags array and tagIds array
+    let tags = [];
+    if (contact.tags && Array.isArray(contact.tags)) {
+      tags = contact.tags;
+    } else if (contact.tagIds && Array.isArray(contact.tagIds)) {
+      tags = contact.tagIds.map(tagId => crmState.tags[tagId]).filter(Boolean);
+    }
+    
+    // Display max 2 tags
+    const maxTags = 2;
+    const visibleTags = tags.slice(0, maxTags);
+    const remainingTags = tags.length - maxTags;
+    const tagsMarkup = visibleTags.length > 0
+      ? visibleTags.map(tag => 
+        `<span class="tag-badge" style="background: ${tag.color}20; color: ${tag.color}; font-size: 9px; padding: 1px 5px; display: inline-block; margin-left: 4px;">${tag.name}</span>`
+      ).join('') + (remainingTags > 0 ? `<span style="color: var(--muted); font-size: 9px; margin-left: 4px;">+${remainingTags}</span>` : '')
+      : '';
+
     return `
       <div class="contact-item ${isActive ? 'active' : ''}" data-contact-id="${contact.id}">
         <div class="contact-avatar">${contact.name ? contact.name[0] : '?'}</div>
         <div class="contact-item-info">
           <div class="contact-item-name">${contact.name || contact.phone}</div>
           <div class="contact-item-preview">${lastMsg ? lastMsg.content : 'No messages yet'}</div>
+          <div class="contact-item-crm" style="display: flex; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+            ${statusMarkup}
+            ${tagsMarkup}
+          </div>
         </div>
         <div class="contact-item-meta">
           <div>${time}</div>
@@ -887,6 +944,8 @@ function initChat() {
 
       if (data.success) {
         await loadContactMessages(chatState.currentContact.id);
+        // Reload contacts list to get updated lead status and tags
+        await loadChatContacts(chatState.currentSession);
         alert(`✓ Sync complete!\n\n${data.synced} new messages synced\n${data.skipped} duplicates skipped`);
       }
     } catch (err) {
