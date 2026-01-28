@@ -54,6 +54,7 @@ async function loadCRMContacts(sessionId) {
           totalPages: data.pagination.totalPages
         };
       }
+      console.log('Loaded contacts:', data.contacts);
       renderCRMContacts(data.contacts);
       renderPagination();
     } else {
@@ -100,7 +101,7 @@ async function loadCRMLeadStatuses(sessionId) {
       data.statuses.forEach(status => {
         crmState.leadStatuses[status.id] = status;
       });
-
+      console.log('Loaded lead statuses:', Object.keys(crmState.leadStatuses), crmState.leadStatuses);
       renderCRMStatusFilters();
     }
   } catch (err) {
@@ -125,7 +126,8 @@ function renderCRMContacts(contacts) {
   }
 
   gridDiv.innerHTML = contacts.map(contact => {
-    const status = crmState.leadStatuses[contact.leadStatusId];
+    // Use leadStatus from API response directly, or fallback to leadStatusId lookup
+    const status = contact.leadStatus || crmState.leadStatuses[contact.leadStatusId];
     const tags = (contact.tagIds || []).map(tagId => crmState.tags[tagId]).filter(Boolean);
     const latestNote = contact.latestNote;
     const displayName = contact.name || contact.phone;
@@ -369,8 +371,12 @@ async function showContactDetailModal(contactId, sessionId = null) {
 function renderContactDetailModal(contact) {
   const modalBody = document.getElementById('contactDetailModalBody');
 
-  const status = crmState.leadStatuses[contact.leadStatusId];
+  // Use leadStatus from API response directly, or fallback to leadStatusId lookup
+  const status = contact.leadStatus || crmState.leadStatuses[contact.leadStatusId];
   const tags = contact.tags || [];
+
+  // Get current lead status ID for the dropdown selection
+  const currentStatusId = contact.leadStatus?.id || contact.leadStatusId || '';
 
   modalBody.innerHTML = `
     <div class="contact-detail-header">
@@ -390,8 +396,9 @@ function renderContactDetailModal(contact) {
     <div class="contact-detail-section">
       <h4>Lead Status</h4>
       <select id="contactStatusSelect" class="form-group">
+        <option value="">Pilih Lead Status</option>
         ${Object.values(crmState.leadStatuses).map(s =>
-          `<option value="${s.id}" ${s.id === contact.leadStatusId ? 'selected' : ''}>${s.name}</option>`
+          `<option value="${s.id}" ${s.id === currentStatusId ? 'selected' : ''}>${s.name}</option>`
         ).join('')}
       </select>
     </div>
@@ -528,17 +535,25 @@ function renderContactDetailModal(contact) {
  */
 async function updateContactStatus(contactId, statusId) {
   try {
+    console.log('Updating contact status:', contactId, 'to status:', statusId);
     const res = await fetch(`/api/contacts/${contactId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: crmState.currentSession, statusId })
     });
 
+    const data = await res.json();
+    console.log('Status update response:', data);
+
     if (res.ok) {
       alert('Status updated!');
-      loadCRMContacts(crmState.currentSession);
+      await loadCRMContacts(crmState.currentSession);
+    } else {
+      console.error('Status update failed:', data.error || data.message);
+      alert('Failed to update status: ' + (data.error || data.message));
     }
   } catch (err) {
+    console.error('Failed to update status:', err);
     alert('Failed to update status');
   }
 }
@@ -589,6 +604,7 @@ async function updateContactName(contactId, name) {
     }
 
     await showContactDetailModal(contactId, crmState.currentSession);
+    await loadCRMContacts(crmState.currentSession);
   } catch (err) {
     alert(err.message || 'Failed to update contact name');
   }
