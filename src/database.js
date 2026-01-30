@@ -11,9 +11,10 @@ const poolConfig = {
   user: process.env.TIDB_USER,
   password: process.env.TIDB_PASSWORD,
   database: process.env.TIDB_DATABASE || 'whiskeysocket_crm',
-  ssl: {
+  // Flexible SSL configuration via environment variables
+  ssl: process.env.DB_SSL_ENABLED === 'false' ? false : {
     minVersion: 'TLSv1.2',
-    rejectUnauthorized: true
+    rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false'
   },
   waitForConnections: true,
   connectionLimit: 10,
