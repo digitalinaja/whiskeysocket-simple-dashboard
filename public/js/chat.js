@@ -247,6 +247,9 @@ function renderChatContactsList() {
     const isActive = chatState.currentContact?.id === contact.id;
     const lastMsg = contact.lastMessage;
     const time = lastMsg ? formatMessageTime(lastMsg.timestamp) : '';
+    const replyStateClass = (lastMsg && lastMsg.direction)
+      ? (lastMsg.direction === 'outgoing' ? 'replied' : 'unreplied')
+      : '';
 
     // Get lead status from contact if available
     const status = contact.leadStatus || crmState.leadStatuses[contact.leadStatusId];
@@ -273,7 +276,7 @@ function renderChatContactsList() {
       : '';
 
     return `
-      <div class="contact-item ${isActive ? 'active' : ''}" data-contact-id="${contact.id}">
+      <div class="contact-item ${isActive ? 'active' : ''} ${replyStateClass}" data-contact-id="${contact.id}">
         <div class="contact-avatar">${contact.name ? contact.name[0] : '?'}</div>
         <div class="contact-item-info">
           <div class="contact-item-name">${contact.name || contact.phone}</div>

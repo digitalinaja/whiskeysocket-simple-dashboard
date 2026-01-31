@@ -38,6 +38,31 @@
     };
   </script>
   <link rel="stylesheet" href="css/output.css">
+  <style>
+    .contact-item.replied:not(.active),
+    .contact-item.replied.active {
+      border-color: rgba(0, 187, 127, 0.3);
+      background: rgba(0, 187, 127, 0.05);
+    }
+
+    .contact-item.unreplied:not(.active),
+    .contact-item.unreplied.active {
+      border-color: rgba(251, 191, 36, 0.4);
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    :root[data-theme='light'] .contact-item.replied:not(.active),
+    :root[data-theme='light'] .contact-item.replied.active {
+      border-color: #6ee7b7;
+      background: #ecfdf5;
+    }
+
+    :root[data-theme='light'] .contact-item.unreplied:not(.active),
+    :root[data-theme='light'] .contact-item.unreplied.active {
+      border-color: #fcd34d;
+      background: #fffbeb;
+    }
+  </style>
 
 </head>
 <body>

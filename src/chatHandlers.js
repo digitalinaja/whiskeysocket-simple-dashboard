@@ -551,7 +551,8 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
               lastInteraction: timestamp.toISOString(),
               lastMessage: {
                 content: messageContent,
-                timestamp: timestamp.toISOString()
+                timestamp: timestamp.toISOString(),
+                direction: direction
               },
               messageCount: (contact.messageCount || 0) + 1
             }
@@ -647,7 +648,8 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
           lastInteraction: timestamp.toISOString(),  // IMPORTANT: Include for sorting!
           lastMessage: {  // IMPORTANT: Include for message preview!
             content: messageContent,
-            timestamp: timestamp.toISOString()
+            timestamp: timestamp.toISOString(),
+            direction: direction
           },
           messageCount: (contact.messageCount || 0) + 1  // Increment message count
         }
@@ -1161,6 +1163,7 @@ async function getContactsWithRecentMessages(sessionId, search = '', limit = 20)
         c.*,
         (SELECT content FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_content,
         (SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_time,
+        (SELECT direction FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_direction,
         (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as message_count
       FROM contacts c
       WHERE c.session_id = ?
@@ -1190,7 +1193,8 @@ async function getContactsWithRecentMessages(sessionId, search = '', limit = 20)
       messageCount: c.message_count,
       lastMessage: {
         content: c.last_message_content,
-        timestamp: c.last_message_time
+        timestamp: c.last_message_time,
+        direction: c.last_message_direction
       }
     }));
   } catch (error) {

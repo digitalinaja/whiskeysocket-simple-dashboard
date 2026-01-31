@@ -163,6 +163,7 @@ router.get('/contacts', async (req, res) => {
         ls.name as lead_status_name, ls.color as lead_status_color,
         (SELECT content FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_content,
         (SELECT timestamp FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_time,
+        (SELECT direction FROM messages WHERE contact_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_direction,
         (SELECT COUNT(*) FROM messages WHERE contact_id = c.id) as message_count,
         (SELECT GROUP_CONCAT(t.id) FROM contact_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.contact_id = c.id) as tag_ids,
         (SELECT content FROM notes WHERE contact_id = c.id ORDER BY created_at DESC LIMIT 1) as latest_note_content,
@@ -205,7 +206,8 @@ router.get('/contacts', async (req, res) => {
         messageCount: c.message_count,
         lastMessage: {
           content: c.last_message_content,
-          timestamp: c.last_message_time
+          timestamp: c.last_message_time,
+          direction: c.last_message_direction
         },
         latestNote: c.latest_note_content ? {
           content: c.latest_note_content,
