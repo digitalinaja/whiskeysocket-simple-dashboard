@@ -11,12 +11,12 @@
     @apply text-slate-200;
   }
   input, textarea, select {
-    @apply w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
+    @apply w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400/40;
   }
   button {
     @apply rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200;
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
-    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
+    @apply bg-teal-600 text-white hover:bg-teal-500 active:bg-teal-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   table {
     @apply w-full text-sm;
@@ -28,60 +28,60 @@
     @apply text-slate-200;
   }
   :root[data-theme='light'] body {
-    @apply bg-slate-100 text-slate-900;
+    @apply bg-slate-50 text-slate-800;
   }
   :root[data-theme='light'] a {
-    @apply text-slate-700;
+    @apply text-slate-600;
   }
   :root[data-theme='light'] input,
   :root[data-theme='light'] textarea,
   :root[data-theme='light'] select {
-    @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-500;
+    @apply border-slate-200 bg-slate-50 text-slate-800 placeholder:text-slate-400;
   }
   :root[data-theme='light'] button {
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply bg-teal-500 text-white hover:bg-teal-400 active:bg-teal-600;
     @apply focus:ring-offset-white;
   }
 
   /* Light theme button variants */
   :root[data-theme='light'] .btn-ghost {
-    @apply border-slate-300 text-slate-700 bg-transparent;
-    @apply hover:bg-slate-100 hover:text-slate-900 hover:border-slate-400;
+    @apply border-slate-200 text-slate-600 bg-slate-50;
+    @apply hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300;
     @apply active:bg-slate-200 active:border-slate-300;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .btn-primary {
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply bg-teal-500 text-white hover:bg-teal-400 active:bg-teal-600;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .btn-danger {
-    @apply bg-rose-600 text-white hover:bg-rose-500 active:bg-rose-700;
+    @apply bg-rose-500 text-white hover:bg-rose-400 active:bg-rose-600;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .btn-sm {
-    @apply border-slate-300 text-slate-700 bg-slate-50;
-    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply border-slate-200 text-slate-600 bg-slate-50;
+    @apply hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300;
     @apply active:bg-slate-300 active:border-slate-400;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .btn-icon {
-    @apply border-slate-300 text-slate-700 bg-slate-50;
-    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply border-slate-200 text-slate-600 bg-slate-50;
+    @apply hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300;
     @apply active:bg-slate-300 active:border-slate-400;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .btn-send {
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
+    @apply bg-teal-500 text-white hover:bg-teal-400 active:bg-teal-600;
     @apply focus:ring-offset-white;
   }
 
   :root[data-theme='light'] .attach-media-btn {
-    @apply border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-100;
+    @apply border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-100;
   }
 }
 
@@ -121,7 +121,7 @@
     @apply flex items-center gap-3 text-lg font-semibold;
   }
   .logo-icon {
-    @apply flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500 text-slate-950 font-bold;
+    @apply flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500 text-slate-950 font-bold;
   }
   .nav-menu {
     @apply px-3 pb-6;
@@ -138,11 +138,11 @@
     @apply focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-inset;
   }
   .nav-item.active {
-    @apply bg-slate-800 text-cyan-400 font-semibold;
-    @apply focus:ring-cyan-500/50;
+    @apply bg-slate-800 text-teal-400 font-semibold;
+    @apply focus:ring-teal-500/50;
   }
   .nav-item:hover.active {
-    @apply bg-slate-700 text-cyan-300;
+    @apply bg-slate-700 text-teal-300;
   }
   .main-content {
     @apply min-h-screen flex-1 px-5 py-6 md:px-8;
@@ -203,8 +203,8 @@
   }
   .btn-primary {
     @apply rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200;
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
-    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
+    @apply bg-teal-600 text-white hover:bg-teal-500 active:bg-teal-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
   .btn-sm {
     @apply rounded-md border px-3 py-1 text-xs font-medium transition-all duration-200;
@@ -222,21 +222,21 @@
   }
   .btn-send {
     @apply rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200;
-    @apply bg-cyan-600 text-white hover:bg-cyan-500 active:bg-cyan-700;
-    @apply focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950;
+    @apply bg-teal-600 text-white hover:bg-teal-500 active:bg-teal-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-slate-950;
   }
 
   /* Disabled button states */
   button:disabled,
   .btn-disabled {
     @apply opacity-50 cursor-not-allowed;
-    @apply hover:bg-cyan-600 hover:text-white;
+    @apply hover:bg-teal-600 hover:text-white;
     @apply focus:ring-0;
   }
   :root[data-theme='light'] button:disabled,
   :root[data-theme='light'] .btn-disabled {
     @apply opacity-50 cursor-not-allowed;
-    @apply hover:bg-cyan-600 hover:text-white;
+    @apply hover:bg-teal-600 hover:text-white;
     @apply focus:ring-0;
   }
 
@@ -432,7 +432,7 @@
     @apply mt-4 flex flex-wrap gap-2;
   }
   .session-selector select {
-    @apply bg-slate-900/60 border-slate-800 text-slate-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-400/40;
+    @apply bg-slate-900/60 border-slate-800 text-slate-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-400/40;
   }
   .session-selector-row {
     @apply flex-1 min-w-[200px];
@@ -521,7 +521,7 @@
     @apply gap-3;
   }
   .info-banner {
-    @apply rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-200;
+    @apply rounded-lg border border-teal-400/30 bg-teal-400/10 p-3 text-sm text-teal-200;
   }
   .helper-text {
     @apply mt-1 block text-xs text-slate-400;
@@ -589,7 +589,7 @@
     @apply bg-slate-800 text-slate-100;
   }
   .message.outgoing .message-bubble {
-    @apply bg-cyan-500/90 text-slate-950;
+    @apply bg-teal-500/90 text-slate-950;
   }
   .message.deleted .message-bubble {
     @apply bg-slate-900/40 text-slate-400;
@@ -600,6 +600,34 @@
   .message-status {
     @apply ml-1;
   }
+
+  /* Quoted message preview */
+  .quoted-message-preview {
+    @apply cursor-pointer rounded px-3 py-2 mb-2 -mx-3;
+    @apply border-l-3 border-teal-500 bg-teal-500/10;
+  }
+  .quoted-message-preview:hover {
+    @apply bg-teal-500/20;
+  }
+  .quoted-message-label {
+    @apply text-xs text-slate-400 mb-1;
+  }
+  .quoted-message-content {
+    @apply text-sm text-slate-200 truncate;
+  }
+  :root[data-theme='light'] .quoted-message-preview {
+    @apply border-teal-600 bg-teal-100;
+  }
+  :root[data-theme='light'] .quoted-message-preview:hover {
+    @apply bg-teal-200;
+  }
+  :root[data-theme='light'] .quoted-message-label {
+    @apply text-slate-600;
+  }
+  :root[data-theme='light'] .quoted-message-content {
+    @apply text-slate-800;
+  }
+
   .message-media {
     @apply mb-2 overflow-hidden rounded-lg border border-slate-700;
   }
@@ -661,16 +689,16 @@
     @apply border-rose-400/40 bg-rose-400/15 text-rose-200;
   }
   :root[data-theme='light'] .sidebar {
-    @apply bg-white/90 border-slate-200;
+    @apply bg-white/80 border-slate-200;
   }
   :root[data-theme='light'] .nav-item {
-    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-800;
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-700;
   }
   :root[data-theme='light'] .nav-item.active {
-    @apply bg-cyan-50 text-cyan-700 font-semibold border-l-2 border-cyan-600;
+    @apply bg-teal-100/60 text-teal-800 font-semibold border-l-2 border-teal-400;
   }
   :root[data-theme='light'] .nav-item:hover.active {
-    @apply bg-cyan-100 text-cyan-800;
+    @apply bg-teal-100 text-teal-800;
   }
   :root[data-theme='light'] .card,
   :root[data-theme='light'] .chat-contacts-sidebar,
@@ -678,13 +706,13 @@
   :root[data-theme='light'] .crm-filters-sidebar,
   :root[data-theme='light'] .contact-card,
   :root[data-theme='light'] .modal-content {
-    @apply bg-white border-slate-200;
+    @apply bg-white border-slate-300;
   }
   :root[data-theme='light'] .status-badge {
-    @apply bg-slate-100 border-slate-200 text-slate-700;
+    @apply bg-slate-100 border-slate-300 text-slate-600;
   }
   :root[data-theme='light'] .lead-status-pill {
-    @apply bg-slate-100 border-slate-200 text-slate-700;
+    @apply bg-slate-100 border-slate-300 text-slate-600;
   }
   :root[data-theme='light'] .lead-status-empty,
   :root[data-theme='light'] .tag-empty,
@@ -693,19 +721,19 @@
     @apply text-slate-500;
   }
   :root[data-theme='light'] .contact-card-note {
-    @apply border-slate-200 bg-white;
+    @apply border-slate-300 bg-slate-100;
   }
   :root[data-theme='light'] .note-text {
     @apply text-slate-800;
   }
   :root[data-theme='light'] .log {
-    @apply bg-slate-100 border-slate-200 text-slate-700;
+    @apply bg-slate-100 border-slate-300 text-slate-600;
   }
   :root[data-theme='light'] .contact-item.active {
-    @apply bg-slate-100 border-slate-200;
+    @apply bg-slate-100 border-slate-300;
   }
   :root[data-theme='light'] .contact-item:hover {
-    @apply bg-slate-100 border-slate-200;
+    @apply bg-slate-100 border-slate-300;
   }
   :root[data-theme='light'] .contact-item.replied:not(.active),
   :root[data-theme='light'] .contact-item.replied.active {
@@ -716,7 +744,7 @@
     @apply border-amber-300 bg-amber-50;
   }
   :root[data-theme='light'] .contact-item-name {
-    @apply text-slate-900;
+    @apply text-slate-800;
   }
   :root[data-theme='light'] .contact-item:hover .contact-item-name {
     @apply text-slate-800;
@@ -725,30 +753,42 @@
   :root[data-theme='light'] h2,
   :root[data-theme='light'] h3,
   :root[data-theme='light'] h4 {
-    @apply text-slate-900;
+    @apply text-slate-800;
+  }
+  :root[data-theme='light'] .text-amber-200 {
+    @apply text-amber-700;
+  }
+  :root[data-theme='light'] .text-amber-200\/70 {
+    @apply text-amber-600;
+  }
+  :root[data-theme='light'] .text-teal-200 {
+    @apply text-teal-700;
+  }
+  :root[data-theme='light'] .text-teal-200\/70 {
+    @apply text-teal-600;
   }
   :root[data-theme='light'] .message-input-area,
   :root[data-theme='light'] .chat-window-header {
     @apply border-slate-200;
   }
   :root[data-theme='light'] .message.incoming .message-bubble {
-    @apply bg-slate-900 text-slate-100;
+    @apply bg-slate-100 text-slate-800;
   }
   :root[data-theme='light'] .message.outgoing .message-bubble {
-    @apply bg-cyan-300 text-slate-900;
+    @apply bg-teal-200 text-slate-900;
   }
 
   /* Ensure message bubble text contrast in light mode (explicit overrides) */
   :root[data-theme='light'] .message-bubble {
-    color: rgb(199, 216, 253); /* text-slate-900 fallback */
+    color: #334155;
   }
 
   :root[data-theme='light'] .message.outgoing .message-bubble {
-    color: rgb(17 24 39) !important;
+    color: #0f172a !important;
   }
   :root[data-theme='light'] .job-item,
   :root[data-theme='light'] .job-stat {
-    @apply bg-white border-slate-200;
+    @apply bg-slate-50 border-slate-200;
   }
   :root[data-theme='light'] .message-media {
     @apply border-slate-200;
@@ -781,7 +821,7 @@
       @apply mb-3 flex items-center gap-2;
     }
     .tag-filter-search {
-      @apply flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40;
+      @apply flex-1 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400/40;
     }
     .tag-filter-clear {
       @apply text-xs text-slate-400 border border-slate-700 rounded-lg px-2 py-1 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40;
@@ -793,7 +833,7 @@
       @apply flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-xs text-slate-200 transition;
     }
     .tag-filter-chip.active {
-      @apply border-cyan-400/60 bg-cyan-400/20 text-cyan-100;
+      @apply border-teal-400/60 bg-teal-400/20 text-teal-100;
     }
     .tag-filter-chip:hover {
       @apply border-slate-600 bg-slate-800;
@@ -811,26 +851,26 @@
     @apply text-slate-700;
   }
   :root[data-theme='light'] .note-item {
-    @apply bg-white border-slate-200;
+    @apply bg-slate-50 border-slate-200;
   }
   :root[data-theme='light'] .text-muted {
     @apply text-slate-500;
   }
   :root[data-theme='light'] .modal {
-    @apply bg-black/50;
+    @apply bg-black/30;
   }
   :root[data-theme='light'] .modal-content {
-    @apply bg-white border-slate-200;
+    @apply bg-slate-50 border-slate-200;
   }
   :root[data-theme='light'] .modal-close {
-    @apply border-slate-300 bg-slate-50 text-slate-700;
-    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply border-slate-200 bg-slate-100 text-slate-600;
+    @apply hover:bg-slate-200 hover:text-slate-800 hover:border-slate-300;
   }
   :root[data-theme='light'] .btn-close-modal {
-    @apply border-slate-300 bg-slate-50 text-slate-700;
-    @apply hover:bg-slate-200 hover:text-slate-900 hover:border-slate-400;
+    @apply border-slate-200 bg-slate-100 text-slate-600;
+    @apply hover:bg-slate-200 hover:text-slate-800 hover:border-slate-300;
   }
-}
+
   /* Groups UI Styles - Uses same layout as Chat */
   .category-tabs {
     @apply flex flex-wrap gap-1 p-1.5 mb-1 rounded-lg bg-slate-800/30;
@@ -842,11 +882,11 @@
     @apply focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-inset;
   }
   .category-tab.active {
-    @apply bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold;
-    @apply focus:ring-cyan-500/50;
+    @apply bg-teal-500/20 text-teal-300 border-teal-500/40 font-semibold;
+    @apply focus:ring-teal-500/50;
   }
   .category-tab:hover.active {
-    @apply bg-cyan-500/30 text-cyan-200 border-cyan-500/50;
+    @apply bg-teal-500/30 text-teal-200 border-teal-500/50;
   }
   .tab-icon {
     @apply text-sm;
@@ -858,14 +898,14 @@
     @apply text-[10px] px-1.5 py-0.5 rounded-full bg-black/20;
   }
   .category-tab.active .tab-count {
-    @apply bg-cyan-500/30 text-cyan-100;
+    @apply bg-teal-500/30 text-teal-100;
   }
   .category-badge-btn {
     @apply ml-2 px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer transition;
     @apply border border-transparent bg-slate-800 text-slate-300;
   }
   .category-badge-btn:hover {
-    @apply border-cyan-500/50 bg-cyan-500/20 text-cyan-200;
+    @apply border-teal-500/50 bg-teal-500/20 text-teal-200;
   }
   .groups-list {
     @apply mt-4 flex-1 space-y-2 overflow-y-auto;
@@ -1040,7 +1080,7 @@
   }
 
   .message.group-message.outgoing .message-bubble {
-    @apply bg-cyan-500/90 text-slate-950 rounded-xl rounded-tr-sm px-3 py-2 inline-flex flex-col;
+    @apply bg-teal-500/90 text-slate-950 rounded-xl rounded-tr-sm px-3 py-2 inline-flex flex-col;
   }
 
   .message-reactions {
@@ -1065,7 +1105,7 @@
   }
 
   .message.group-message.incoming .bubble-sender-name {
-    @apply text-cyan-400;
+    @apply text-teal-400;
   }
 
   .message.group-message.outgoing .bubble-sender-name {
@@ -1112,7 +1152,7 @@
     @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-lg transition-all duration-200 cursor-pointer transform hover:scale-[1.02];
   }
   .session-item.active {
-    @apply border-cyan-500/50 bg-cyan-500/10;
+    @apply border-teal-500/50 bg-teal-500/10;
   }
   .session-item-info {
     @apply flex-1;
@@ -1141,7 +1181,7 @@
     @apply flex-1 rounded-md px-4 py-2 text-sm font-medium transition;
   }
   .input-method-btn.active {
-    @apply bg-cyan-500/20 text-cyan-200;
+    @apply bg-teal-500/20 text-teal-200;
   }
   .input-method-btn:not(.active) {
     @apply text-slate-400 hover:text-slate-200 hover:bg-slate-800/50;
@@ -1150,7 +1190,7 @@
     @apply border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-slate-600 transition cursor-pointer;
   }
   .csv-dropzone:hover {
-    @apply border-cyan-500/50 bg-cyan-500/5;
+    @apply border-teal-500/50 bg-teal-500/5;
   }
   .preset-description-card {
     @apply p-3 rounded-lg border text-sm;
@@ -1186,7 +1226,7 @@
     @apply flex items-center justify-between mb-4;
   }
   .recipient-count-badge {
-    @apply text-sm px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-200;
+    @apply text-sm px-2 py-1 rounded-full bg-teal-500/20 text-teal-200;
   }
   :root[data-theme='light'] .input-method-toggle {
     @apply bg-slate-200/50;
@@ -1198,10 +1238,10 @@
     @apply text-slate-500 hover:bg-slate-200 hover:text-slate-700;
   }
   :root[data-theme='light'] .category-tab.active {
-    @apply bg-cyan-100 text-cyan-700 border-cyan-300;
+    @apply bg-teal-100 text-teal-700 border-teal-300;
   }
   :root[data-theme='light'] .category-tab:hover.active {
-    @apply bg-cyan-200 text-cyan-800 border-cyan-400;
+    @apply bg-teal-200 text-teal-800 border-teal-400;
   }
 
   /* Light theme toggle buttons */
@@ -1222,6 +1262,6 @@
     @apply border-slate-300;
   }
   :root[data-theme='light'] .csv-dropzone:hover {
-    @apply border-cyan-400/50 bg-cyan-50;
+    @apply border-teal-400/50 bg-teal-50;
   }
 }

@@ -709,13 +709,16 @@ const Groups = {
       // Build quoted message preview
       let quotedPreviewHtml = '';
       if (message.quotedContent && message.quotedMessageId) {
+        const maxQuoteLength = 80;
+        const truncatedQuote = message.quotedContent.length > maxQuoteLength 
+          ? message.quotedContent.substring(0, maxQuoteLength) + '...' 
+          : message.quotedContent;
         quotedPreviewHtml = `
           <div class="quoted-message-preview"
-               data-quoted-id="${this.escapeHtml(message.quotedMessageId)}"
-               style="cursor: pointer; padding: 8px 12px; margin: 0 -12px 8px -12px; border-left: 3px solid #06b6d4; background: rgba(6, 182, 212, 0.1); border-radius: 4px;">
-            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">💬 Reply:</div>
-            <div style="font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-              ${this.escapeHtml(message.quotedContent)}
+               data-quoted-id="${this.escapeHtml(message.quotedMessageId)}">
+            <div class="quoted-message-label">💬 Reply:</div>
+            <div class="quoted-message-content">
+              ${this.escapeHtml(truncatedQuote)}
             </div>
           </div>
         `;

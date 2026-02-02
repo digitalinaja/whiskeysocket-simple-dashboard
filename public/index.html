@@ -62,6 +62,167 @@
       border-color: #fcd34d;
       background: #fffbeb;
     }
+
+    /* Soft light mode - global overrides */
+    :root[data-theme='light'] body {
+      background: #f1f5f9;
+      color: #1f2937;
+    }
+
+    :root[data-theme='light'] a {
+      color: #475569;
+    }
+
+    :root[data-theme='light'] input,
+    :root[data-theme='light'] textarea,
+    :root[data-theme='light'] select {
+      background: #ffffff;
+      color: #1f2937;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] button {
+      background: #14b8a6;
+      color: #ffffff;
+    }
+
+    :root[data-theme='light'] button:hover {
+      background: #5eead4;
+    }
+
+    :root[data-theme='light'] button:active {
+      background: #0d9488;
+    }
+
+    :root[data-theme='light'] .btn-ghost,
+    :root[data-theme='light'] .btn-sm,
+    :root[data-theme='light'] .btn-icon {
+      background: #ffffff;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .btn-ghost:hover,
+    :root[data-theme='light'] .btn-sm:hover,
+    :root[data-theme='light'] .btn-icon:hover {
+      background: #f1f5f9;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .sidebar {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: #e2e8f0;
+    }
+
+    :root[data-theme='light'] .nav-item {
+      color: #475569;
+    }
+
+    :root[data-theme='light'] .nav-item:hover {
+      background: #f1f5f9;
+      color: #334155;
+    }
+
+    :root[data-theme='light'] .nav-item.active {
+      background: #ccfbf1;
+      color: #134e4a;
+      border-color: #5eead4;
+    }
+
+    :root[data-theme='light'] .card,
+    :root[data-theme='light'] .chat-contacts-sidebar,
+    :root[data-theme='light'] .chat-window,
+    :root[data-theme='light'] .crm-filters-sidebar,
+    :root[data-theme='light'] .contact-card,
+    :root[data-theme='light'] .modal-content {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .status-badge,
+    :root[data-theme='light'] .lead-status-pill {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #475569;
+    }
+
+    :root[data-theme='light'] .log,
+    :root[data-theme='light'] .note-item,
+    :root[data-theme='light'] .contact-card-note {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .contact-item.active,
+    :root[data-theme='light'] .contact-item:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .contact-item-name,
+    :root[data-theme='light'] h1,
+    :root[data-theme='light'] h2,
+    :root[data-theme='light'] h3,
+    :root[data-theme='light'] h4 {
+      color: #1f2937;
+    }
+
+    :root[data-theme='light'] .message.incoming .message-bubble {
+      background: #e2e8f0;
+      color: #1f2937;
+    }
+
+    :root[data-theme='light'] .message.outgoing .message-bubble {
+      background: #99f6e4;
+      color: #0f172a;
+    }
+
+    :root[data-theme='light'] .message-bubble {
+      color: #334155;
+    }
+
+    :root[data-theme='light'] .job-item,
+    :root[data-theme='light'] .job-stat {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
+    :root[data-theme='light'] .modal {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    :root[data-theme='light'] .modal-close,
+    :root[data-theme='light'] .btn-close-modal {
+      background: #ffffff;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    /* Text color overrides for visibility in light mode */
+    :root[data-theme='light'] .text-amber-200,
+    :root[data-theme='light'] .text-amber-200\/70 {
+      color: #b45309 !important;
+    }
+    :root[data-theme='light'] .text-teal-200,
+    :root[data-theme='light'] .text-teal-200\/70 {
+      color: #0f766e !important;
+    }
+
+    /* Background overrides for light mode info boxes */
+    :root[data-theme='light'] .bg-teal-500\/20,
+    :root[data-theme='light'] .bg-teal-400\/10 {
+      background-color: #ccfbf1 !important;
+    }
+    :root[data-theme='light'] .bg-amber-400\/15 {
+      background-color: #fef3c7 !important;
+    }
+    :root[data-theme='light'] .border-teal-400\/30 {
+      border-color: #5eead4 !important;
+    }
+    :root[data-theme='light'] .border-amber-400\/40 {
+      border-color: #fbbf24 !important;
+    }
   </style>
 
 </head>
@@ -364,7 +525,7 @@
             <div class="mb-4">
               <label class="block text-xs font-medium text-slate-300 mb-2">Input Method</label>
               <div class="flex gap-2 p-1 bg-slate-800/30 rounded-lg">
-                <button type="button" id="methodManual" class="flex-1 rounded-md px-4 py-2 text-sm font-medium transition bg-cyan-500/20 text-cyan-200">
+                <button type="button" id="methodManual" class="flex-1 rounded-md px-4 py-2 text-sm font-medium transition bg-teal-500/20 text-teal-200">
                   📝 Manual
                 </button>
                 <button type="button" id="methodCsv" class="flex-1 rounded-md px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition">
@@ -416,12 +577,12 @@
             <div class="form-group mb-4">
               <textarea id="broadcastMessage" rows="6" placeholder="Type your broadcast message here...&#10;&#10;Tip: Use {name} to personalize messages"></textarea>
             </div>
-            <div id="personalizationHelper" class="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+            <div id="personalizationHelper" class="p-3 rounded-lg bg-teal-500/10 border border-teal-500/20">
               <div class="flex items-start gap-2 text-sm">
                 <span>💡</span>
                 <div>
-                  <strong class="text-cyan-200">Personalization Available</strong>
-                  <p class="text-cyan-200/70 text-xs mt-1">Use <code class="px-1 py-0.5 rounded bg-black/20">{name}</code> in your message to mention recipient's name</p>
+                  <strong class="text-teal-200">Personalization Available</strong>
+                  <p class="text-teal-200/70 text-xs mt-1">Use <code class="px-1 py-0.5 rounded bg-black/20">{name}</code> in your message to mention recipient's name</p>
                 </div>
               </div>
             </div>
@@ -534,9 +695,9 @@
               <span class="text-xl">⏱️</span>
               <span>Estimation</span>
             </h3>
-            <div id="estimatedTime" class="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-center">
+            <div id="estimatedTime" class="p-4 rounded-lg bg-teal-500/10 border border-teal-500/20 text-center">
               <p class="text-xs text-slate-400 mb-1">Estimated Duration</p>
-              <p class="text-lg font-semibold text-cyan-200" id="estimatedTimeValue">--</p>
+              <p class="text-lg font-semibold text-teal-200" id="estimatedTimeValue">--</p>
               <p class="text-xs text-slate-500 mt-2" id="estimatedTimeSub">Add recipients to see estimate</p>
             </div>
             <div id="warningBanner" class="hidden mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
