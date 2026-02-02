@@ -24,7 +24,13 @@ const chatState = {
   messagesOffset: 0,
   messagesLimit: 50,
   hasMoreMessages: true,
-  isLoadingMoreMessages: false
+  isLoadingMoreMessages: false,
+  // Contact list pagination state
+  contactsOffset: 0,
+  contactsLimit: 50,
+  hasMoreContacts: true,
+  isLoadingMoreContacts: false,
+  contactsTotal: 0
 };
 
 // CRM state

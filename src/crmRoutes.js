@@ -936,15 +936,15 @@ function streamToBuffer(stream) {
  */
 router.get('/groups', async (req, res) => {
   try {
-    const { sessionId, category = 'all' } = req.query;
+    const { sessionId, category = 'all', limit = 50, offset = 0 } = req.query;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const groups = await groupHandlers.getGroupsByCategory(sessionId, category);
+    const result = await groupHandlers.getGroupsByCategory(sessionId, category, parseInt(limit), parseInt(offset));
 
-    res.json({ groups });
+    res.json(result);
   } catch (error) {
     console.error('Error fetching groups:', error);
     res.status(500).json({ error: 'Failed to fetch groups' });

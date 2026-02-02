@@ -133,16 +133,59 @@ function renderChatTagsFilter() {
 }
 
 /**
- * Update clear filters button visibility
+ * Initialize filter toggle functionality
+ */
+function initFilterToggle() {
+  const toggleBtn = document.getElementById('filterToggleBtn');
+  const filterPanel = document.getElementById('filterPanel');
+  
+  if (!toggleBtn || !filterPanel) return;
+  
+  toggleBtn.addEventListener('click', () => {
+    const isExpanded = !filterPanel.classList.contains('collapsed');
+    if (isExpanded) {
+      filterPanel.classList.add('collapsed');
+      toggleBtn.classList.remove('expanded');
+    } else {
+      filterPanel.classList.remove('collapsed');
+      toggleBtn.classList.add('expanded');
+    }
+  });
+}
+
+/**
+ * Update clear filters button visibility and filter count badge
  */
 function updateClearFiltersButton() {
   const clearBtn = document.getElementById('clearChatFilters');
-  if (!clearBtn) return;
+  const filterCount = document.getElementById('activeFilterCount');
+  const toggleBtn = document.getElementById('filterToggleBtn');
   
-  if (chatFilters.hasFilters()) {
-    clearBtn.style.display = 'block';
-  } else {
-    clearBtn.style.display = 'none';
+  const hasFilters = chatFilters.hasFilters();
+  const count = (chatFilters.status ? 1 : 0) + chatFilters.tags.length;
+  
+  // Update clear button
+  if (clearBtn) {
+    clearBtn.disabled = !hasFilters;
+  }
+  
+  // Update filter count badge
+  if (filterCount) {
+    if (count > 0) {
+      filterCount.textContent = count;
+      filterCount.style.display = 'inline-block';
+    } else {
+      filterCount.style.display = 'none';
+    }
+  }
+  
+  // Highlight toggle button if filters active
+  if (toggleBtn) {
+    if (hasFilters) {
+      toggleBtn.style.borderColor = 'rgb(20 184 166 / 0.5)';
+    } else {
+      toggleBtn.style.borderColor = '';
+    }
   }
 }
 
@@ -192,14 +235,24 @@ async function ensureCRMDataLoaded(sessionId) {
 /**
  * Load chat contacts
  */
-async function loadChatContacts(sessionId, search = '') {
+async function loadChatContacts(sessionId, search = '', append = false) {
   if (!sessionId) return;
+
+  // Reset pagination on new search or session change
+  if (!append) {
+    chatState.contactsOffset = 0;
+    chatState.contacts = {};
+  }
+
+  if (chatState.isLoadingMoreContacts) return;
+  chatState.isLoadingMoreContacts = true;
 
   try {
     const params = new URLSearchParams({
       sessionId,
       search,
-      limit: '50'
+      limit: chatState.contactsLimit.toString(),
+      page: Math.floor(chatState.contactsOffset / chatState.contactsLimit) + 1
     });
 
     // Add filter parameters if any
@@ -213,10 +266,18 @@ async function loadChatContacts(sessionId, search = '') {
 
     if (!res.ok) throw new Error(data.error);
 
-    chatState.contacts = {};
     data.contacts.forEach(contact => {
       chatState.contacts[contact.id] = contact;
     });
+
+    // Update pagination state
+    if (data.pagination) {
+      chatState.contactsTotal = data.pagination.total;
+      chatState.hasMoreContacts = chatState.contactsOffset + data.contacts.length < data.pagination.total;
+      chatState.contactsOffset += data.contacts.length;
+    } else {
+      chatState.hasMoreContacts = false;
+    }
 
     renderChatContactsList();
     
@@ -224,6 +285,8 @@ async function loadChatContacts(sessionId, search = '') {
     await ensureCRMDataLoaded(sessionId);
   } catch (err) {
     console.error('Failed to load contacts:', err);
+  } finally {
+    chatState.isLoadingMoreContacts = false;
   }
 }
 
@@ -293,12 +356,61 @@ function renderChatContactsList() {
     `;
   }).join('');
 
+  // Add loading indicator if there are more contacts
+  if (chatState.hasMoreContacts) {
+    listDiv.innerHTML += `
+      <div id="contactsLoadMore" class="load-more-indicator" style="padding: 16px; text-align: center; color: var(--muted);">
+        <span class="loading-spinner" style="display: none;">⏳ Loading...</span>
+        <span class="load-more-text">${chatState.contactsTotal > 0 ? `Showing ${Object.keys(chatState.contacts).length} of ${chatState.contactsTotal}` : 'Scroll for more'}</span>
+      </div>
+    `;
+  }
+
   listDiv.querySelectorAll('.contact-item').forEach(item => {
     item.addEventListener('click', () => {
       const contactId = parseInt(item.dataset.contactId);
       openChatContact(contactId);
     });
   });
+}
+
+/**
+ * Load more contacts on scroll (infinite scroll)
+ */
+async function loadMoreContacts() {
+  if (chatState.isLoadingMoreContacts || !chatState.hasMoreContacts) return;
+  
+  const loadIndicator = document.getElementById('contactsLoadMore');
+  if (loadIndicator) {
+    loadIndicator.querySelector('.loading-spinner').style.display = 'inline';
+    loadIndicator.querySelector('.load-more-text').style.display = 'none';
+  }
+  
+  const searchInput = document.getElementById('chatSearchInput');
+  const search = searchInput ? searchInput.value : '';
+  await loadChatContacts(chatState.currentSession, search, true);
+}
+
+/**
+ * Initialize contacts list scroll handler
+ */
+function initContactsScrollHandler() {
+  const listDiv = document.getElementById('chatContactsList');
+  if (!listDiv) return;
+  
+  // Remove existing handler if any
+  listDiv.removeEventListener('scroll', handleContactsScroll);
+  listDiv.addEventListener('scroll', handleContactsScroll);
+}
+
+function handleContactsScroll(e) {
+  const listDiv = e.target;
+  const scrollBottom = listDiv.scrollHeight - listDiv.scrollTop - listDiv.clientHeight;
+  
+  // Load more when scrolled near bottom (100px threshold)
+  if (scrollBottom < 100 && chatState.hasMoreContacts && !chatState.isLoadingMoreContacts) {
+    loadMoreContacts();
+  }
 }
 
 /**
@@ -1069,6 +1181,12 @@ function initChat() {
   document.getElementById('clearChatFilters')?.addEventListener('click', () => {
     clearChatFilters();
   });
+
+  // Initialize filter toggle
+  initFilterToggle();
+
+  // Initialize contacts list infinite scroll
+  initContactsScrollHandler();
 
   document.getElementById('sendMessageBtn')?.addEventListener('click', sendMessage);
 

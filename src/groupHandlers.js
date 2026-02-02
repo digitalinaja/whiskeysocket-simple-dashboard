@@ -211,10 +211,26 @@ async function syncGroupParticipants(groupId, participants, sessionId = null) {
 /**
  * Get groups by session and category
  */
-async function getGroupsByCategory(sessionId, category = 'all') {
+async function getGroupsByCategory(sessionId, category = 'all', limit = 50, offset = 0) {
   const connection = getPool();
 
   try {
+    // First get total count
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM whatsapp_groups wg
+      WHERE wg.session_id = ?
+    `;
+    const countParams = [sessionId];
+    
+    if (category !== 'all') {
+      countQuery += ` AND wg.category = ?`;
+      countParams.push(category);
+    }
+    
+    const [countResult] = await connection.query(countQuery, countParams);
+    const total = countResult[0].total;
+
     let query = `
       SELECT
         wg.id,
@@ -267,11 +283,12 @@ async function getGroupsByCategory(sessionId, category = 'all') {
       params.push(category);
     }
 
-    query += ` ORDER BY wg.last_interaction_at DESC`;
+    query += ` ORDER BY wg.last_interaction_at DESC LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const [groups] = await connection.query(query, params);
 
-    return groups.map(g => ({
+    const groupsData = groups.map(g => ({
       id: g.id,
       sessionId: g.session_id,
       groupId: `${g.group_id}@g.us`,
@@ -286,6 +303,16 @@ async function getGroupsByCategory(sessionId, category = 'all') {
       } : null,
       unreadCount: g.unread_count || 0
     }));
+
+    return {
+      groups: groupsData,
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: parseInt(offset) + groupsData.length < total
+      }
+    };
   } catch (error) {
     console.error('Error getting groups:', error);
     throw error;

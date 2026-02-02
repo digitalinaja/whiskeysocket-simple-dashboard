@@ -12,6 +12,12 @@ const Groups = {
   messagesLimit: 50,
   hasMoreMessages: true,
   isLoadingMore: false,
+  // Groups list pagination state
+  groupsOffset: 0,
+  groupsLimit: 50,
+  hasMoreGroups: true,
+  isLoadingMoreGroups: false,
+  groupsTotal: 0,
 
   // Initialize Groups module
   init() {
@@ -19,6 +25,35 @@ const Groups = {
     this.bindEvents();
     this.setupSocketListeners();
     this.loadSessions();
+    this.initGroupsScrollHandler();
+  },
+
+  // Initialize groups list scroll handler
+  initGroupsScrollHandler() {
+    const listDiv = document.getElementById('groupsList');
+    if (!listDiv) return;
+    
+    listDiv.addEventListener('scroll', (e) => {
+      const scrollBottom = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight;
+      
+      // Load more when scrolled near bottom (100px threshold)
+      if (scrollBottom < 100 && this.hasMoreGroups && !this.isLoadingMoreGroups) {
+        this.loadMoreGroups();
+      }
+    });
+  },
+
+  // Load more groups
+  async loadMoreGroups() {
+    if (this.isLoadingMoreGroups || !this.hasMoreGroups) return;
+    
+    const loadIndicator = document.getElementById('groupsLoadMore');
+    if (loadIndicator) {
+      loadIndicator.querySelector('.loading-spinner').style.display = 'inline';
+      loadIndicator.querySelector('.load-more-text').style.display = 'none';
+    }
+    
+    await this.loadGroups(true);
   },
 
   // Load available sessions
@@ -207,28 +242,51 @@ const Groups = {
     });
 
     // Reload groups with new filter
+    this.groupsOffset = 0;
+    this.groups = [];
     this.loadGroups();
   },
 
   // Load groups from API
-  async loadGroups() {
+  async loadGroups(append = false) {
     if (!this.currentSession) {
       this.showEmptyState();
       return;
     }
 
+    // Reset pagination on new load
+    if (!append) {
+      this.groupsOffset = 0;
+      this.groups = [];
+    }
+
+    if (this.isLoadingMoreGroups) return;
+    this.isLoadingMoreGroups = true;
+
     try {
-      const response = await fetch(`/api/groups?sessionId=${this.currentSession}&category=${this.currentCategory}`);
+      const response = await fetch(`/api/groups?sessionId=${this.currentSession}&category=${this.currentCategory}&limit=${this.groupsLimit}&offset=${this.groupsOffset}`);
       const data = await response.json();
 
       if (data.groups) {
-        this.groups = data.groups;
+        this.groups = [...this.groups, ...data.groups];
+        
+        // Update pagination state
+        if (data.pagination) {
+          this.groupsTotal = data.pagination.total;
+          this.hasMoreGroups = data.pagination.hasMore;
+          this.groupsOffset += data.groups.length;
+        } else {
+          this.hasMoreGroups = false;
+        }
+        
         this.renderGroupsList();
         this.updateCategoryCounts();
       }
     } catch (error) {
       console.error('Failed to load groups:', error);
       this.showError('Failed to load groups');
+    } finally {
+      this.isLoadingMoreGroups = false;
     }
   },
 
@@ -249,6 +307,16 @@ const Groups = {
     }
 
     groupsList.innerHTML = this.groups.map(group => this.renderGroupCard(group)).join('');
+
+    // Add loading indicator if there are more groups
+    if (this.hasMoreGroups) {
+      groupsList.innerHTML += `
+        <div id="groupsLoadMore" class="load-more-indicator" style="padding: 16px; text-align: center; color: var(--muted);">
+          <span class="loading-spinner" style="display: none;">⏳ Loading...</span>
+          <span class="load-more-text">${this.groupsTotal > 0 ? `Showing ${this.groups.length} of ${this.groupsTotal}` : 'Scroll for more'}</span>
+        </div>
+      `;
+    }
 
     // Add click listeners to group cards
     groupsList.querySelectorAll('.contact-item.group-item').forEach(card => {

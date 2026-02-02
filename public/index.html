@@ -851,16 +851,26 @@
               <input type="text" id="chatSearchInput" placeholder="Search contacts...">
             </div>
             <div class="chat-filters">
-              <div class="filter-row">
-                <select id="chatStatusFilter" class="filter-select">
-                  <option value="">All Statuses</option>
-                </select>
+              <button type="button" id="filterToggleBtn" class="filter-toggle-btn">
+                <span><span class="filter-icon">🔍</span>Filters</span>
+                <span id="activeFilterCount" class="filter-count" style="display: none;">0</span>
+                <span class="chevron">▼</span>
+              </button>
+              <div id="filterPanel" class="filter-panel collapsed">
+                <div class="filter-row">
+                  <label class="filter-label">Lead Status</label>
+                  <select id="chatStatusFilter" class="filter-select">
+                    <option value="">All Statuses</option>
+                  </select>
+                </div>
+                <div class="filter-row">
+                  <label class="filter-label">Tags</label>
+                  <div class="filter-tags" id="chatTagsFilter">
+                    <div class="filter-tags-placeholder">Loading tags...</div>
+                  </div>
+                </div>
+                <button type="button" id="clearChatFilters" class="clear-filters-btn" disabled>✕ Clear All Filters</button>
               </div>
-              <div class="filter-tags" id="chatTagsFilter">
-                <!-- Tags will be rendered here -->
-                <div class="filter-tags-placeholder">Loading tags...</div>
-              </div>
-              <button type="button" id="clearChatFilters" class="btn-sm" style="margin-top: 8px; width: 100%; display: none;">Clear Filters</button>
             </div>
           </div>
           <div class="contacts-list" id="chatContactsList">
