@@ -2,7 +2,7 @@
 // Declarative schema definition for all tables, columns, indexes, and constraints
 // Used for validation and migration
 
-export const SCHEMA_VERSION = '1.4.0';
+export const SCHEMA_VERSION = '1.5.0';
 
 export const SCHEMA_DEFINITIONS = {
   contacts: {
@@ -81,6 +81,8 @@ export const SCHEMA_DEFINITIONS = {
       { name: 'idx_is_group_message', columns: ['is_group_message'] },
       { name: 'idx_group_id', columns: ['group_id'] },
       { name: 'idx_quoted_message_id', columns: ['quoted_message_id'] },
+      { name: 'idx_group_timestamp', columns: ['group_id', 'timestamp'] },
+      { name: 'idx_group_direction', columns: ['group_id', 'direction'] },
     ],
     foreignKeys: [
       { column: 'contact_id', refTable: 'contacts', refColumn: 'id', onDelete: 'SET NULL' },

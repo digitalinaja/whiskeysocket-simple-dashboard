@@ -58,7 +58,21 @@ function navigateTo(viewId, sessionId = null) {
       }
     }
     if (chatState.currentSession) {
-      loadChatContacts(chatState.currentSession);
+      const pending = window.pendingChatOpen;
+      loadChatContacts(chatState.currentSession).then(() => {
+        if (!pending) return;
+        if (pending.sessionId && pending.sessionId !== chatState.currentSession) return;
+
+        if (pending.contactId && !chatState.contacts[pending.contactId] && pending.contact) {
+          chatState.contacts[pending.contactId] = pending.contact;
+        }
+
+        if (pending.contactId) {
+          openChatContact(pending.contactId);
+        }
+
+        window.pendingChatOpen = null;
+      });
     }
   } else if (viewId === 'contacts') {
     // Auto-select first session if none selected

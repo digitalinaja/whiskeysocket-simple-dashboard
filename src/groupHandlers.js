@@ -215,94 +215,117 @@ async function getGroupsByCategory(sessionId, category = 'all', limit = 50, offs
   const connection = getPool();
 
   try {
+    // Build WHERE clause
+    let whereClause = `WHERE wg.session_id = ?`;
+    const whereParams = [sessionId];
+
+    if (category !== 'all') {
+      whereClause += ` AND wg.category = ?`;
+      whereParams.push(category);
+    }
+
     // First get total count
-    let countQuery = `
+    const countQuery = `
       SELECT COUNT(*) as total
       FROM whatsapp_groups wg
-      WHERE wg.session_id = ?
+      ${whereClause}
     `;
-    const countParams = [sessionId];
-    
-    if (category !== 'all') {
-      countQuery += ` AND wg.category = ?`;
-      countParams.push(category);
-    }
-    
-    const [countResult] = await connection.query(countQuery, countParams);
+    const [countResult] = await connection.query(countQuery, whereParams);
     const total = countResult[0].total;
 
-    let query = `
+    // Get base groups data with pagination
+    let baseQuery = `
       SELECT
         wg.id,
         wg.session_id,
         wg.group_id,
         wg.subject,
-        (
-          SELECT COUNT(*) FROM group_participants WHERE group_id = wg.id
-        ) as participant_count,
         wg.category,
         wg.last_interaction_at,
-        wg.created_at,
-        (
-          SELECT content FROM messages
-          WHERE group_id = wg.id
-          ORDER BY timestamp DESC
-          LIMIT 1
-        ) as last_message_content,
-        (
-          SELECT CONCAT(participant_name, ': ', content)
-          FROM messages
-          WHERE group_id = wg.id
-          ORDER BY timestamp DESC
-          LIMIT 1
-        ) as last_message_full,
-        (
-          SELECT participant_name FROM messages
-          WHERE group_id = wg.id
-          ORDER BY timestamp DESC
-          LIMIT 1
-        ) as last_sender_name,
-        (
-          SELECT timestamp FROM messages
-          WHERE group_id = wg.id
-          ORDER BY timestamp DESC
-          LIMIT 1
-        ) as last_message_timestamp,
-        (
-          SELECT COUNT(*) FROM messages
-          WHERE group_id = wg.id AND direction = 'incoming'
-        ) as unread_count
+        wg.created_at
       FROM whatsapp_groups wg
-      WHERE wg.session_id = ?
+      ${whereClause}
+      ORDER BY wg.last_interaction_at DESC
+      LIMIT ? OFFSET ?
     `;
+    const baseParams = [...whereParams, parseInt(limit), parseInt(offset)];
+    const [groups] = await connection.query(baseQuery, baseParams);
 
-    const params = [sessionId];
-
-    if (category !== 'all') {
-      query += ` AND wg.category = ?`;
-      params.push(category);
+    if (groups.length === 0) {
+      return {
+        groups: [],
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          hasMore: false
+        }
+      };
     }
 
-    query += ` ORDER BY wg.last_interaction_at DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    // Get group IDs for batch queries
+    const groupIds = groups.map(g => g.id);
 
-    const [groups] = await connection.query(query, params);
+    // Batch fetch participant counts
+    const [participantCounts] = await connection.query(
+      `SELECT group_id, COUNT(*) as count
+       FROM group_participants
+       WHERE group_id IN (${groupIds.map(() => '?').join(',')})
+       GROUP BY group_id`,
+      groupIds
+    );
+    const participantMap = Object.fromEntries(
+      participantCounts.map(p => [p.group_id, p.count])
+    );
 
-    const groupsData = groups.map(g => ({
-      id: g.id,
-      sessionId: g.session_id,
-      groupId: `${g.group_id}@g.us`,
-      subject: g.subject || 'Unknown Group',
-      participantCount: g.participant_count || 0,
-      category: g.category,
-      lastInteraction: g.last_interaction_at,
-      lastMessage: g.last_message_content ? {
-        content: g.last_message_content,
-        senderName: g.last_sender_name || 'Someone',
-        timestamp: g.last_message_timestamp
-      } : null,
-      unreadCount: g.unread_count || 0
-    }));
+    // Batch fetch last messages - using simple approach for each group
+    const lastMessageMap = {};
+    for (const groupId of groupIds) {
+      const [msgs] = await connection.query(
+        `SELECT content, participant_name, timestamp
+         FROM messages
+         WHERE group_id = ?
+         ORDER BY timestamp DESC
+         LIMIT 1`,
+        [groupId]
+      );
+      if (msgs.length > 0) {
+        lastMessageMap[groupId] = msgs[0];
+      }
+    }
+
+    // Batch fetch unread counts
+    const [unreadCounts] = await connection.query(
+      `SELECT group_id, COUNT(*) as count
+       FROM messages
+       WHERE group_id IN (${groupIds.map(() => '?').join(',')})
+       AND direction = 'incoming'
+       GROUP BY group_id`,
+      groupIds
+    );
+    const unreadMap = Object.fromEntries(
+      unreadCounts.map(u => [u.group_id, u.count])
+    );
+
+    // Combine all data
+    const groupsData = groups.map(g => {
+      const lastMsg = lastMessageMap[g.id];
+      return {
+        id: g.id,
+        sessionId: g.session_id,
+        groupId: `${g.group_id}@g.us`,
+        subject: g.subject || 'Unknown Group',
+        participantCount: participantMap[g.id] || 0,
+        category: g.category,
+        lastInteraction: g.last_interaction_at,
+        lastMessage: lastMsg ? {
+          content: lastMsg.content,
+          senderName: lastMsg.participant_name || 'Someone',
+          timestamp: lastMsg.timestamp
+        } : null,
+        unreadCount: unreadMap[g.id] || 0
+      };
+    });
 
     return {
       groups: groupsData,

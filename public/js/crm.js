@@ -517,17 +517,23 @@ function renderContactDetailModal(contact) {
       chatState.contacts[contact.id] = contact;
     }
 
-    if (!chatState.currentSession) {
+    if (!chatState.currentSession || chatState.currentSession !== contact.sessionId) {
       chatState.currentSession = contact.sessionId;
     }
+
+    if (typeof state !== 'undefined' && contact.sessionId) {
+      state.activeSession = contact.sessionId;
+    }
+
+    window.pendingChatOpen = {
+      contactId: contact.id,
+      sessionId: contact.sessionId,
+      contact
+    };
 
     const modal = document.getElementById('contactDetailModal');
     modal.classList.remove('active');
     window.location.hash = 'chat';
-
-    setTimeout(() => {
-      openChatContact(contact.id);
-    }, 200);
   });
 }
 
