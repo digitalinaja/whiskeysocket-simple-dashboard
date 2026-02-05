@@ -167,15 +167,85 @@ async function saveMediaLocally(rawMessage, messageId, messageType) {
 }
 
 /**
- * Helper function to convert stream to buffer
+ * Helper function to convert stream to buffer with retry logic
+ * @param {ReadableStream} stream - The media stream from downloadContentFromMessage
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @param {number} retryDelay - Delay between retries in ms
  */
-function streamToBuffer(stream) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', reject);
-  });
+async function streamToBuffer(stream, maxRetries = 2, retryDelay = 1000) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const chunks = [];
+        let streamDestroyed = false;
+
+        const cleanup = () => {
+          if (!streamDestroyed && stream && typeof stream.destroy === 'function') {
+            try {
+              stream.destroy();
+              streamDestroyed = true;
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }
+        };
+
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Stream download timeout'));
+        }, 60000); // 60 second timeout
+
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('end', () => {
+          clearTimeout(timeout);
+          cleanup();
+          resolve(Buffer.concat(chunks));
+        });
+
+        stream.on('error', (err) => {
+          clearTimeout(timeout);
+          cleanup();
+
+          // Handle specific network errors
+          if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') {
+            console.warn(`   ⚠️ Network error during download (attempt ${attempt + 1}/${maxRetries + 1}): ${err.code}`);
+            reject(err);
+          } else {
+            reject(err);
+          }
+        });
+
+        // Handle aborted streams
+        stream.on('close', () => {
+          clearTimeout(timeout);
+        });
+      });
+    } catch (error) {
+      lastError = error;
+
+      // Check if this is a retryable error
+      const isRetryable = error.code === 'ECONNRESET' ||
+                         error.code === 'ETIMEDOUT' ||
+                         error.code === 'ECONNABORTED' ||
+                         error.message?.includes('terminated') ||
+                         error.message?.includes('timeout');
+
+      // If it's the last attempt or not a retryable error, throw
+      if (attempt >= maxRetries || !isRetryable) {
+        console.error(`   ✗ Failed to download media after ${attempt + 1} attempt(s): ${error.code || error.message}`);
+        throw new Error(`Media download failed: ${error.code || error.message}`);
+      }
+
+      // Wait before retrying with exponential backoff
+      const waitTime = retryDelay * Math.pow(2, attempt);
+      console.log(`   ⟳ Retrying in ${waitTime / 1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -593,9 +663,17 @@ async function handleIncomingMessage(sessionId, message, sock, io, messageType =
             `UPDATE messages SET media_url = ? WHERE message_id = ? AND session_id = ?`,
             [localMediaPath, messageId, sessionId]
           );
+          console.log(`✓ Media URL updated in database: ${localMediaPath}`);
+        } else {
+          console.log(`⚠️ Media download returned null, message saved without local file`);
         }
       } catch (err) {
-        console.error('Failed to save media locally:', err);
+        console.error(`✗ Failed to save media locally for message ${messageId}:`, {
+          error: err.message,
+          code: err.code,
+          type: msgType,
+          note: 'Message saved in DB but media file could not be downloaded. This may be due to network issues or the media being unavailable on WhatsApp servers.'
+        });
       }
     }
 
