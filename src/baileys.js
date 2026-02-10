@@ -23,6 +23,7 @@ async function startWA({
     default: makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
+    Browsers,
   } = await getBaileys();
   const { state, saveCreds } = await useMultiFileAuthState(authPath);
   let sock;
@@ -33,6 +34,9 @@ async function startWA({
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
+      // Enable MD Codex 5.3 - Multi-Device history sync with desktop emulation
+      browser: Browsers.macOS('Desktop'),
+      syncFullHistory: true,
     });
 
     if (onSockUpdate) onSockUpdate(sock);
