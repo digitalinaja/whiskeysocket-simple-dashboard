@@ -14,6 +14,7 @@ import * as googleContacts from "./googleContacts.js";
 import * as outlookContacts from "./outlookContacts.js";
 import * as sessionStorage from "./sessionStorage.js";
 import crmRoutes from "./crmRoutes.js";
+import analyticsRoutes from "./analyticsRoutes.js";
 import { authenticateToken, checkAuthStatus } from "./authMiddleware.js";
 import jwt from "jsonwebtoken";
 
@@ -141,6 +142,7 @@ app.get('/test-logout', (req, res) => {
 
 // Mount CRM API routes with authentication
 app.use('/api', authenticateToken, crmRoutes);
+app.use('/api', authenticateToken, analyticsRoutes);
 
 // Google OAuth routes
 app.get('/auth/google', (req, res) => {
@@ -354,56 +356,71 @@ function broadcastStatus(sessionId) {
 }
 
 async function createSession(sessionId) {
-  if (sessions.has(sessionId)) return sessions.get(sessionId);
-  const authPath = getAuthPath(sessionId);
-  fs.mkdirSync(authPath, { recursive: true });
+  let session = sessions.get(sessionId);
+  const isRestart = session && (session.isManualDisconnect || session.status.state === 'close');
 
-  // Try to restore session from cloud if local files don't exist
-  const hasLocalCreds = fs.existsSync(path.join(authPath, 'creds.json'));
-  if (!hasLocalCreds) {
-    try {
-      console.log(`Attempting to restore session ${sessionId} from cloud...`);
-      const cloudSession = await sessionStorage.loadSessionFromCloud(sessionId);
-      
-      if (cloudSession) {
-        // Restore credentials from cloud
-        if (cloudSession.creds) {
-          fs.writeFileSync(
-            path.join(authPath, 'creds.json'),
-            JSON.stringify(cloudSession.creds, null, 2)
-          );
-          console.log(`✓ Restored credentials for ${sessionId} from cloud`);
-        }
-        
-        // Restore app state if exists
-        if (cloudSession.appState) {
-          fs.writeFileSync(
-            path.join(authPath, 'app-state-sync-key-undefined.json'),
-            JSON.stringify(cloudSession.appState, null, 2)
-          );
-          console.log(`✓ Restored app state for ${sessionId} from cloud`);
-        }
-      }
-    } catch (err) {
-      console.warn(`Could not restore session ${sessionId} from cloud (this is normal for new sessions):`, err.message);
-      // Continue - this is normal for new sessions
-    }
+  if (session && !isRestart) {
+    return session;
   }
 
-  const session = {
-    id: sessionId,
-    authPath,
-    sock: null,
-    status: { state: "starting", hasQR: false },
-    user: null,
-    lastQR: null,
-  };
-  sessions.set(sessionId, session);
+  const authPath = getAuthPath(sessionId);
+
+  if (!session) {
+    fs.mkdirSync(authPath, { recursive: true });
+
+    // Try to restore session from cloud if local files don't exist
+    const hasLocalCreds = fs.existsSync(path.join(authPath, 'creds.json'));
+    if (!hasLocalCreds) {
+      try {
+        console.log(`Attempting to restore session ${sessionId} from cloud...`);
+        const cloudSession = await sessionStorage.loadSessionFromCloud(sessionId);
+
+        if (cloudSession) {
+          // Restore credentials from cloud
+          if (cloudSession.creds) {
+            fs.writeFileSync(
+              path.join(authPath, 'creds.json'),
+              JSON.stringify(cloudSession.creds, null, 2)
+            );
+            console.log(`✓ Restored credentials for ${sessionId} from cloud`);
+          }
+
+          // Restore app state if exists
+          if (cloudSession.appState) {
+            fs.writeFileSync(
+              path.join(authPath, 'app-state-sync-key-undefined.json'),
+              JSON.stringify(cloudSession.appState, null, 2)
+            );
+            console.log(`✓ Restored app state for ${sessionId} from cloud`);
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not restore session ${sessionId} from cloud (this is normal for new sessions):`, err.message);
+        // Continue - this is normal for new sessions
+      }
+    }
+
+    session = {
+      id: sessionId,
+      authPath,
+      sock: null,
+      status: { state: "starting", hasQR: false },
+      user: null,
+      lastQR: null,
+    };
+    sessions.set(sessionId, session);
+  } else {
+    // Reset flags for restart
+    session.isManualDisconnect = false;
+    session.status = { state: "starting", hasQR: false };
+    // We keep existing authPath and user info if available
+  }
 
   session.sock = await startWA({
     io,
     sessionId,
     authPath,
+    shouldReconnect: () => !session.isManualDisconnect, // Don't reconnect if manually disconnected
     onSockUpdate: (newSock) => {
       session.sock = newSock;
       session.user = newSock?.user || session.user;
@@ -450,6 +467,44 @@ async function createSession(sessionId) {
   broadcastStatus(sessionId);
   return session;
 }
+
+// Disconnect endpoint (Offline mode)
+app.post("/sessions/:id/disconnect", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const session = sessions.get(id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  try {
+    session.isManualDisconnect = true; // Flag to prevent auto-reconnect
+    if (session.sock) {
+      session.sock.end(new Error('Manual disconnect')); // Close connection
+    }
+    res.json({ status: "disconnected", sessionId: id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Connect endpoint (Online mode)
+app.post("/sessions/:id/connect", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // If session exists, reset manual disconnect flag
+    const session = sessions.get(id);
+    if (session) {
+      session.isManualDisconnect = false;
+    }
+
+    // Call createSession to re-establish connection
+    // Note: We need to modify createSession to handle re-initialization of existing but disconnected sessions
+    await createSession(id);
+    res.json({ status: "connecting", sessionId: id });
+  } catch (err) {
+    console.error("Connect failed", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 function getSessionOrError(sessionId, res) {
   const session = sessions.get(sessionId);
@@ -1267,11 +1322,11 @@ app.get("/cloud/sessions/:id/status", authenticateToken, async (req, res) => {
   try {
     const sessions = await sessionStorage.listSessionsFromCloud();
     const session = sessions.find(s => s.session_id === id);
-    
+
     if (!session) {
       return res.status(404).json({ error: "Session not found in cloud" });
     }
-    
+
     res.json({
       sessionId: id,
       lastSynced: session.last_synced_at,
@@ -1321,20 +1376,20 @@ app.post("/cloud/sessions/:id/sync", authenticateToken, async (req, res) => {
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
-    
+
     const authPath = getAuthPath(id);
     const credsPath = path.join(authPath, 'creds.json');
-    
+
     if (!fs.existsSync(credsPath)) {
       return res.status(400).json({ error: "No credentials found for this session" });
     }
-    
+
     // Read and sync to cloud
     const sessionData = {
       creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
       timestamp: Date.now()
     };
-    
+
     const appStatePath = path.join(authPath, 'app-state-sync-key-undefined.json');
     if (fs.existsSync(appStatePath)) {
       try {
@@ -1343,7 +1398,7 @@ app.post("/cloud/sessions/:id/sync", authenticateToken, async (req, res) => {
         console.warn('Could not read app state');
       }
     }
-    
+
     await sessionStorage.saveSessionToCloud(id, sessionData);
     res.json({ status: "synced to cloud", sessionId: id });
   } catch (error) {
@@ -1357,14 +1412,14 @@ app.post("/cloud/sessions/:id/restore", authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     const cloudSession = await sessionStorage.loadSessionFromCloud(id);
-    
+
     if (!cloudSession) {
       return res.status(404).json({ error: "Session not found in cloud" });
     }
-    
+
     const authPath = getAuthPath(id);
     fs.mkdirSync(authPath, { recursive: true });
-    
+
     // Restore credentials
     if (cloudSession.creds) {
       fs.writeFileSync(
@@ -1372,7 +1427,7 @@ app.post("/cloud/sessions/:id/restore", authenticateToken, async (req, res) => {
         JSON.stringify(cloudSession.creds, null, 2)
       );
     }
-    
+
     // Restore app state if exists
     if (cloudSession.appState) {
       fs.writeFileSync(
@@ -1380,11 +1435,11 @@ app.post("/cloud/sessions/:id/restore", authenticateToken, async (req, res) => {
         JSON.stringify(cloudSession.appState, null, 2)
       );
     }
-    
+
     // Reload session
     sessions.delete(id);
     await createSession(id);
-    
+
     res.json({ status: "restored from cloud", sessionId: id });
   } catch (error) {
     console.error('Error restoring session from cloud:', error);

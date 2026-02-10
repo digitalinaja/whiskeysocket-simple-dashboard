@@ -6,7 +6,7 @@
  * Update all session select elements
  */
 function updateAllSessionSelects() {
-  const selects = ['sendSessionSelect', 'broadcastSessionSelect', 'jobsSessionSelect', 'chatSessionSelect', 'crmSessionSelect'];
+  const selects = ['sendSessionSelect', 'broadcastSessionSelect', 'jobsSessionSelect', 'chatSessionSelect', 'crmSessionSelect', 'csPerformanceSessionSelect'];
   selects.forEach(selectId => {
     const select = document.getElementById(selectId);
     if (!select) return;
@@ -14,8 +14,8 @@ function updateAllSessionSelects() {
     const currentValue = select.value;
     select.innerHTML = '';
 
-    // Add default option for chat and crm selects
-    if (selectId === 'chatSessionSelect' || selectId === 'crmSessionSelect') {
+    // Add default option for chat, crm, and cs performance selects
+    if (selectId === 'chatSessionSelect' || selectId === 'crmSessionSelect' || selectId === 'csPerformanceSessionSelect') {
       const opt = document.createElement('option');
       opt.value = '';
       opt.textContent = 'Select Session...';
@@ -119,6 +119,20 @@ function updateSessionDetailView() {
     document.getElementById('qrPlaceholder').style.display = 'block';
     document.getElementById('qrCanvas').style.display = 'none';
   }
+
+  // Update Connect/Disconnect button text
+  const logoutBtn = document.getElementById('logoutSessionBtn');
+  if (logoutBtn) {
+    if (session.state === 'open') {
+      logoutBtn.textContent = 'Disconnect';
+      logoutBtn.className = 'btn-secondary'; // Yellowish/warning
+    } else if (session.state === 'close') {
+      logoutBtn.textContent = 'Connect';
+      logoutBtn.className = 'btn-primary'; // Blue/action
+    } else {
+      logoutBtn.textContent = 'Disconnect';
+    }
+  }
 }
 
 /**
@@ -219,8 +233,12 @@ function updateSessionsListView(filter = '') {
         <div style="display: flex; align-items: center; gap: 8px;">
           <!-- Quick action buttons -->
           ${isConnected ? `
-            <button onclick="event.stopPropagation(); logoutSessionFromCard('${s.id}')" style="padding: 4px 10px; background: #fef3c7; color: #92400e; border: none; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer;">
+            <button onclick="event.stopPropagation(); disconnectSession('${s.id}')" style="padding: 4px 10px; background: #fef3c7; color: #92400e; border: none; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer;">
               Disconnect
+            </button>
+          ` : s.state === 'close' ? `
+            <button onclick="event.stopPropagation(); connectSession('${s.id}')" style="padding: 4px 10px; background: #dbeafe; color: #1e40af; border: none; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer;">
+              Connect
             </button>
           ` : ''}
           <button onclick="event.stopPropagation(); deleteSessionFromCard('${s.id}');" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer;">
@@ -233,21 +251,31 @@ function updateSessionsListView(filter = '') {
   }).join('');
 }
 
-// Logout session from card
-async function logoutSessionFromCard(sessionId) {
+// Disconnect session (Offline)
+async function disconnectSession(sessionId) {
   try {
-    // Clear chat/group data before logout
-    clearSessionChatData(sessionId);
-    
-    await postJson(`/sessions/${sessionId}/logout`, {});
-    state.qrMap[sessionId] = null;
-    // Reload sessions
+    await postJson(`/sessions/${sessionId}/disconnect`, {});
+    // Reload sessions to update UI
     await loadInitialSessions();
-    // Update sessions list
     updateSessionsListView();
   } catch (err) {
-    console.error('Logout failed:', err);
-    alert('Failed to logout: ' + err.message);
+    console.error('Disconnect failed:', err);
+    alert('Failed to disconnect: ' + err.message);
+  }
+}
+
+// Connect session (Online)
+async function connectSession(sessionId) {
+  try {
+    // Show loading state implicitly by refreshing UI or similar?
+    // The API returns "connecting"
+    await postJson(`/sessions/${sessionId}/connect`, {});
+    // Reload sessions
+    await loadInitialSessions();
+    updateSessionsListView();
+  } catch (err) {
+    console.error('Connect failed:', err);
+    alert('Failed to connect: ' + err.message);
   }
 }
 
@@ -343,19 +371,37 @@ function initSessions() {
   });
 
   // Logout session handler
-  document.getElementById('logoutSessionBtn').addEventListener('click', async () => {
-    const log = document.getElementById('sessionActionLog');
-    try {
-      // Clear chat/group data before logout
-      clearSessionChatData(state.activeSession);
-      
-      await postJson(`/sessions/${state.activeSession}/logout`, {});
-      state.qrMap[state.activeSession] = null;
-      log.textContent = 'Logged out. Please scan the new QR code.';
-    } catch (err) {
-      log.textContent = `Error: ${err.message}`;
-    }
-  });
+  // Logout/Disconnect session handler
+  const logoutBtn = document.getElementById('logoutSessionBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      const log = document.getElementById('sessionActionLog');
+      const session = state.sessions[state.activeSession];
+
+      try {
+        if (session && session.state === 'open') {
+          // Disconnect
+          await postJson(`/sessions/${state.activeSession}/disconnect`, {});
+          log.textContent = 'Session disconnected (Offline).';
+        } else if (session && session.state === 'close') {
+          // Connect
+          await postJson(`/sessions/${state.activeSession}/connect`, {});
+          log.textContent = 'Connecting...';
+        } else {
+          // Fallback to old logout if needed, or just do nothing/disconnect
+          // For now assume disconnect endpoint handles it
+          await postJson(`/sessions/${state.activeSession}/logout`, {});
+          state.qrMap[state.activeSession] = null;
+          log.textContent = 'Logged out.';
+        }
+        await loadInitialSessions();
+        updateSessionsListView();
+        updateSessionDetailView();
+      } catch (err) {
+        log.textContent = `Error: ${err.message}`;
+      }
+    });
+  }
 
   // Delete session handler
   document.getElementById('deleteSessionBtn').addEventListener('click', async () => {

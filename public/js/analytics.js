@@ -12,6 +12,19 @@ const analyticsState = {
 };
 
 /**
+ * CS Performance state
+ */
+const csPerformanceState = {
+  currentSession: null,
+  currentPeriod: '7d',
+  responseTime: null,
+  messageVolume: null,
+  hourlyPerformance: null,
+  topContacts: null,
+  loading: false
+};
+
+/**
  * Initialize analytics module
  */
 function initAnalytics() {
@@ -266,8 +279,279 @@ function formatContactType(type) {
   return labels[type] || type;
 }
 
+/**
+ * Fetch CS Performance data
+ */
+async function fetchCSPerformance(period = '7d') {
+  const sessionId = csPerformanceState.currentSession;
+  if (!sessionId) {
+    console.warn('No session ID available for CS Performance');
+    return;
+  }
+
+  csPerformanceState.loading = true;
+  csPerformanceState.currentPeriod = period;
+
+  try {
+    // Fetch all metrics in parallel
+    const [responseTime, volume, hourly, contacts] = await Promise.all([
+      fetch(`/api/analytics/cs/response-time?sessionId=${sessionId}&period=${period}`).then(r => r.json()),
+      fetch(`/api/analytics/cs/message-volume?sessionId=${sessionId}&period=${period}`).then(r => r.json()),
+      fetch(`/api/analytics/cs/hourly-performance?sessionId=${sessionId}&period=${period}`).then(r => r.json()),
+      fetch(`/api/analytics/cs/top-contacts?sessionId=${sessionId}&period=${period}&limit=10`).then(r => r.json())
+    ]);
+
+    csPerformanceState.responseTime = responseTime;
+    csPerformanceState.messageVolume = volume;
+    csPerformanceState.hourlyPerformance = hourly;
+    csPerformanceState.topContacts = contacts;
+
+    renderCSPerformance();
+  } catch (error) {
+    console.error('Error fetching CS performance:', error);
+  } finally {
+    csPerformanceState.loading = false;
+  }
+}
+
+/**
+ * Render all CS Performance visualizations
+ */
+function renderCSPerformance() {
+  renderCSResponseTimeCard();
+  renderCSMessageVolumeChart();
+  renderCSHourlyPerformance();
+  renderCSTopContacts();
+}
+
+/**
+ * Render Response Time Card
+ */
+function renderCSResponseTimeCard() {
+  const data = csPerformanceState.responseTime;
+  if (!data) return;
+
+  // Average response time
+  const avgResponseEl = document.getElementById('cs-avg-response');
+  if (avgResponseEl) {
+    avgResponseEl.textContent = data.averageResponseTime.formatted;
+  }
+
+  // Trend
+  const trendEl = document.getElementById('cs-response-trend');
+  if (trendEl) {
+    trendEl.textContent = data.averageResponseTime.trend;
+  }
+
+  // Response distribution
+  const under1MinEl = document.getElementById('cs-under-1min');
+  if (under1MinEl) {
+    under1MinEl.textContent = `${data.responseDistribution.under1Min}% < 1m`;
+  }
+
+  const under5MinEl = document.getElementById('cs-under-5min');
+  if (under5MinEl) {
+    under5MinEl.textContent = `${data.responseDistribution.under5Min}% < 5m`;
+  }
+
+  // Total conversations
+  const totalConversationsEl = document.getElementById('cs-total-conversations');
+  if (totalConversationsEl) {
+    totalConversationsEl.textContent = data.totalConversations || 0;
+  }
+
+  // Fastest response
+  const fastestEl = document.getElementById('cs-fastest-response');
+  if (fastestEl) {
+    fastestEl.textContent = `Fastest: ${data.fastestResponse || '-'}`;
+  }
+}
+
+/**
+ * Render Message Volume Chart
+ */
+function renderCSMessageVolumeChart() {
+  const data = csPerformanceState.messageVolume;
+  if (!data || !data.dailyVolumes) return;
+
+  const container = document.getElementById('volume-chart');
+  if (!container) return;
+
+  const volumes = data.dailyVolumes;
+  if (volumes.length === 0) {
+    container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--muted);">No data available</div>';
+    return;
+  }
+
+  const maxVolume = Math.max(...volumes.map(d => d.total));
+
+  // Update stats
+  const avgDailyEl = document.getElementById('cs-avg-daily');
+  if (avgDailyEl) {
+    avgDailyEl.textContent = data.summary.averagePerDay || 0;
+  }
+
+  const peakDayEl = document.getElementById('cs-peak-day');
+  if (peakDayEl && data.summary.peakDay) {
+    const peakDate = new Date(data.summary.peakDay);
+    const formattedDate = peakDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    peakDayEl.textContent = `Peak: ${formattedDate}`;
+  }
+
+  // Create CSS-based bar chart
+  container.innerHTML = `
+    <div style="display: flex; gap: 8px; align-items: flex-end; height: 200px; padding: 16px; overflow-x: auto;">
+      ${volumes.map(day => {
+        const date = new Date(day.date);
+        const label = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+        const incomingHeight = maxVolume > 0 ? (day.incoming / maxVolume) * 100 : 0;
+        const outgoingHeight = maxVolume > 0 ? (day.outgoing / maxVolume) * 100 : 0;
+
+        return `
+          <div style="display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 40px;">
+            <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">${day.total}</div>
+            <div style="display: flex; gap: 2px; height: 150px; align-items: flex-end;">
+              <div style="width: 12px; height: ${incomingHeight}%; background: var(--color-primary, #3b82f6); border-radius: 4px 4px 0 0; transition: height 0.3s ease; min-height: 4px;" title="Incoming: ${day.incoming}"></div>
+              <div style="width: 12px; height: ${outgoingHeight}%; background: var(--color-secondary, #8b5cf6); border-radius: 4px 4px 0 0; transition: height 0.3s ease; min-height: 4px;" title="Outgoing: ${day.outgoing}"></div>
+            </div>
+            <div style="font-size: 10px; color: var(--muted); margin-top: 4px; text-align: center; transform: rotate(-45deg); transform-origin: center; white-space: nowrap;">${label}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+/**
+ * Render Hourly Performance
+ */
+function renderCSHourlyPerformance() {
+  const data = csPerformanceState.hourlyPerformance;
+  if (!data || !data.hourlyData) return;
+
+  const container = document.getElementById('hourly-chart');
+  if (!container) return;
+
+  const hourlyData = data.hourlyData;
+
+  // Update peak hour stats
+  if (data.peakHour) {
+    const peakHourEl = document.getElementById('cs-peak-hour');
+    if (peakHourEl) {
+      peakHourEl.textContent = `${data.peakHour.hour}:00`;
+    }
+
+    const peakVolumeEl = document.getElementById('cs-peak-volume');
+    if (peakVolumeEl) {
+      peakVolumeEl.textContent = `${data.peakHour.volume} pesan`;
+    }
+  }
+
+  // Create 24-hour heatmap
+  const maxVolume = Math.max(...hourlyData.map(h => h.totalMessages || 0));
+
+  container.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; padding: 16px;">
+      ${hourlyData.map(hour => {
+        const volume = hour.totalMessages || 0;
+        const percentage = maxVolume > 0 ? (volume / maxVolume) * 100 : 0;
+        let bgClass = 'background: #22c55e;'; // green - low
+        if (volume > 100) {
+          bgClass = 'background: #ef4444;'; // red - high
+        } else if (volume > 30) {
+          bgClass = 'background: #eab308;'; // yellow - medium
+        }
+
+        return `
+          <div style="aspect-ratio: 1; border-radius: 4px; ${bgClass} display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: 600; position: relative; cursor: default;" title="${hour.hour}:00 - ${volume} messages">
+            ${hour.hour}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+/**
+ * Render Top Contacts
+ */
+function renderCSTopContacts() {
+  const data = csPerformanceState.topContacts;
+  if (!data || !data.contacts) return;
+
+  const container = document.getElementById('top-contacts-list');
+  if (!container) return;
+
+  const contacts = data.contacts;
+
+  if (contacts.length === 0) {
+    container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--muted);">No contacts data available</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      ${contacts.map((contact, index) => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg);">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary, #3b82f6); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px;">
+            ${index + 1}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${escapeHtml(contact.name)}
+            </div>
+            <div style="font-size: 12px; color: var(--muted);">
+              ${contact.messageCount} pesan • ${contact.lastMessageFormatted || '-'}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 12px; color: var(--muted);">
+              <span style="color: var(--color-primary, #3b82f6);">↓ ${contact.incomingCount}</span> •
+              <span style="color: var(--color-secondary, #8b5cf6);">↑ ${contact.outgoingCount}</span>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/**
+ * Initialize CS Performance module
+ */
+function initCSPerformance() {
+  // Set up session selector
+  const sessionSelect = document.getElementById('csPerformanceSessionSelect');
+  if (sessionSelect) {
+    sessionSelect.addEventListener('change', (e) => {
+      const sessionId = e.target.value;
+      csPerformanceState.currentSession = sessionId;
+      if (sessionId) {
+        fetchCSPerformance(csPerformanceState.currentPeriod);
+      }
+    });
+  }
+
+  // Set up period filter buttons
+  const periodButtons = document.querySelectorAll('.period-filter-btn');
+  periodButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      // Update active state
+      periodButtons.forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+
+      // Fetch data for selected period
+      const period = e.target.dataset.period;
+      fetchCSPerformance(period);
+    });
+  });
+}
+
 // Export functions
 window.initAnalytics = initAnalytics;
 window.fetchDashboard = fetchDashboard;
 window.fetchFunnel = fetchFunnel;
 window.fetchConversion = fetchConversion;
+window.fetchCSPerformance = fetchCSPerformance;
+window.initCSPerformance = initCSPerformance;
+window.csPerformanceState = csPerformanceState;

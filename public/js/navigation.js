@@ -12,7 +12,7 @@ function navigateTo(viewId, sessionId = null) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
   // Update nav items (only for main nav items)
-  if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'groups', 'contacts'].includes(viewId)) {
+  if (['dashboard', 'sessions', 'send-message', 'broadcast', 'jobs', 'chat', 'groups', 'contacts', 'cs-performance'].includes(viewId)) {
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.remove('active');
       if (item.dataset.view === viewId) {
@@ -91,6 +91,23 @@ function navigateTo(viewId, sessionId = null) {
     // Call Groups.onNavigate to refresh sessions and load groups
     if (Groups.onNavigate) {
       Groups.onNavigate();
+    }
+  } else if (viewId === 'cs-performance') {
+    // Initialize CS Performance module and auto-select session
+    if (typeof initCSPerformance === 'function') {
+      initCSPerformance();
+    }
+    // Auto-select first session if none selected (check if state exists)
+    if (typeof csPerformanceState !== 'undefined' && !csPerformanceState.currentSession) {
+      const selectEl = document.getElementById('csPerformanceSessionSelect');
+      const firstSession = selectEl?.querySelector('option:not([value=""])')?.value;
+      if (firstSession) {
+        selectEl.value = firstSession;
+        csPerformanceState.currentSession = firstSession;
+      }
+    }
+    if (typeof csPerformanceState !== 'undefined' && csPerformanceState.currentSession && typeof fetchCSPerformance === 'function') {
+      fetchCSPerformance('7d'); // Load with default 7-day period
     }
   }
 }

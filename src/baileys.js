@@ -21,6 +21,7 @@ async function startWA({
   onMessage,
   onMessageStatus,
   onHistorySync,
+  shouldReconnect, // New parameter
 } = {}) {
   const {
     default: makeWASocket,
@@ -60,9 +61,13 @@ async function startWA({
         if (onStatusChange) onStatusChange({ state: "close", hasQR: false });
 
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        // Reconnect if not logged out AND allowed by custom check
+        let doReconnect = statusCode !== DisconnectReason.loggedOut;
+        if (doReconnect && shouldReconnect && !shouldReconnect()) {
+          doReconnect = false;
+        }
 
-        if (shouldReconnect) {
+        if (doReconnect) {
           setTimeout(startSock, 2000); // simple backoff before reconnect
         }
       }
@@ -71,19 +76,19 @@ async function startWA({
     sock.ev.on("creds.update", async () => {
       // Save locally first
       await saveCreds();
-      
+
       // Then sync to cloud
       try {
         // Read the latest session files from disk
         const credsPath = path.join(authPath, 'creds.json');
         const appStatePath = path.join(authPath, 'app-state-sync-key-undefined.json');
-        
+
         if (fs.existsSync(credsPath)) {
           const sessionData = {
             creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
             timestamp: Date.now()
           };
-          
+
           // Try to read app state if exists
           if (fs.existsSync(appStatePath)) {
             try {
@@ -92,7 +97,7 @@ async function startWA({
               console.warn('Could not read app state:', err.message);
             }
           }
-          
+
           // Save to cloud with error handling
           try {
             await sessionStorage.saveSessionToCloud(sessionId, sessionData);

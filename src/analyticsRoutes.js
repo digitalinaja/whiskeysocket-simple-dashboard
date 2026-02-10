@@ -533,4 +533,361 @@ router.get('/analytics/dashboard', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/analytics/cs/response-time
+ * CS Performance - Average response time calculation
+ */
+router.get('/analytics/cs/response-time', async (req, res) => {
+  try {
+    const { sessionId, period = '7d' } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connection = getPool();
+
+    // Calculate date range based on period
+    const startDate = new Date();
+    if (period === 'today') {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === '7d') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (period === '30d') {
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    const endDate = new Date();
+
+    // Method 1: Quoted Message Pairing (most accurate for direct replies)
+    const [quotedResponseTimes] = await connection.query(
+      `SELECT
+        AVG(TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp)) as avg_response_seconds,
+        MIN(TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp)) as min_response_seconds,
+        MAX(TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp)) as max_response_seconds,
+        COUNT(*) as conversation_count
+      FROM messages q
+      JOIN messages a ON q.quoted_message_id = a.message_id
+      WHERE q.session_id = ?
+        AND q.direction = 'incoming'
+        AND a.direction = 'outgoing'
+        AND q.timestamp BETWEEN ? AND ?`,
+      [sessionId, startDate, endDate]
+    );
+
+    // Calculate response distribution
+    const [responseDistribution] = await connection.query(
+      `SELECT
+        COUNT(CASE WHEN TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp) <= 60 THEN 1 END) as under_1min,
+        COUNT(CASE WHEN TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp) <= 300 THEN 1 END) as under_5min,
+        COUNT(CASE WHEN TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp) <= 900 THEN 1 END) as under_15min,
+        COUNT(CASE WHEN TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp) > 900 THEN 1 END) as over_15min
+      FROM messages q
+      JOIN messages a ON q.quoted_message_id = a.message_id
+      WHERE q.session_id = ?
+        AND q.direction = 'incoming'
+        AND a.direction = 'outgoing'
+        AND q.timestamp BETWEEN ? AND ?`,
+      [sessionId, startDate, endDate]
+    );
+
+    const avgSeconds = quotedResponseTimes[0].avg_response_seconds || 0;
+    const totalConversations = quotedResponseTimes[0].conversation_count || 0;
+
+    // Format response time
+    const formatTime = (seconds) => {
+      if (!seconds || seconds === 0) return '-';
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+    };
+
+    const distribution = responseDistribution[0];
+    const totalResponses = distribution.under_1min + distribution.over_15min ||
+                          distribution.under_1min + distribution.under_5min + distribution.under_15min + distribution.over_15min;
+
+    res.json({
+      period,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      averageResponseTime: {
+        seconds: Math.round(avgSeconds),
+        formatted: formatTime(avgSeconds),
+        trend: '+0% vs prev period' // TODO: Implement trend calculation
+      },
+      responseDistribution: {
+        under1Min: totalResponses > 0 ? Math.round((distribution.under_1min / totalResponses) * 100) : 0,
+        under5Min: totalResponses > 0 ? Math.round((distribution.under_5min / totalResponses) * 100) : 0,
+        under15Min: totalResponses > 0 ? Math.round((distribution.under_15min / totalResponses) * 100) : 0,
+        over15Min: totalResponses > 0 ? Math.round((distribution.over_15min / totalResponses) * 100) : 0
+      },
+      totalConversations,
+      fastestResponse: formatTime(quotedResponseTimes[0].min_response_seconds),
+      slowestResponse: formatTime(quotedResponseTimes[0].max_response_seconds)
+    });
+  } catch (error) {
+    console.error('Error calculating response time:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to calculate response time', details: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/cs/message-volume
+ * CS Performance - Daily message volume analytics
+ */
+router.get('/analytics/cs/message-volume', async (req, res) => {
+  try {
+    const { sessionId, period = '7d' } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connection = getPool();
+
+    // Calculate date range based on period
+    const startDate = new Date();
+    if (period === 'today') {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === '7d') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (period === '30d') {
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    const endDate = new Date();
+
+    // Get daily message volumes
+    const [dailyVolumes] = await connection.query(
+      `SELECT
+        DATE(timestamp) as date,
+        SUM(CASE WHEN direction = 'incoming' THEN 1 ELSE 0 END) as incoming_count,
+        SUM(CASE WHEN direction = 'outgoing' THEN 1 ELSE 0 END) as outgoing_count,
+        COUNT(*) as total_count
+      FROM messages
+      WHERE session_id = ?
+        AND timestamp BETWEEN ? AND ?
+      GROUP BY DATE(timestamp)
+      ORDER BY date ASC`,
+      [sessionId, startDate, endDate]
+    );
+
+    // Calculate summary statistics
+    const totalIncoming = dailyVolumes.reduce((sum, d) => sum + (d.incoming_count || 0), 0);
+    const totalOutgoing = dailyVolumes.reduce((sum, d) => sum + (d.outgoing_count || 0), 0);
+    const totalMessages = totalIncoming + totalOutgoing;
+    const avgPerDay = dailyVolumes.length > 0 ? Math.round(totalMessages / dailyVolumes.length) : 0;
+
+    // Find peak day
+    const peakDay = dailyVolumes.length > 0
+      ? dailyVolumes.reduce((max, d) => d.total_count > max.total_count ? d : max, dailyVolumes[0])
+      : null;
+
+    res.json({
+      period,
+      dailyVolumes: dailyVolumes.map(d => ({
+        date: d.date,
+        incoming: d.incoming_count || 0,
+        outgoing: d.outgoing_count || 0,
+        total: d.total_count || 0
+      })),
+      summary: {
+        totalIncoming,
+        totalOutgoing,
+        avgPerDay,
+        peakDay: peakDay ? peakDay.date : null,
+        peakVolume: peakDay ? peakDay.total_count : 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching message volume:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to fetch message volume', details: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/cs/hourly-performance
+ * CS Performance - Hourly performance analysis (peak hours)
+ */
+router.get('/analytics/cs/hourly-performance', async (req, res) => {
+  try {
+    const { sessionId, period = '7d' } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connection = getPool();
+
+    // Calculate date range based on period
+    const startDate = new Date();
+    if (period === 'today') {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === '7d') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (period === '30d') {
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    const endDate = new Date();
+
+    // Get hourly message distribution and response times
+    const [hourlyData] = await connection.query(
+      `SELECT
+        HOUR(timestamp) as hour,
+        COUNT(*) as total_messages,
+        SUM(CASE WHEN direction = 'incoming' THEN 1 ELSE 0 END) as incoming_count,
+        SUM(CASE WHEN direction = 'outgoing' THEN 1 ELSE 0 END) as outgoing_count
+      FROM messages
+      WHERE session_id = ?
+        AND timestamp BETWEEN ? AND ?
+      GROUP BY HOUR(timestamp)
+      ORDER BY hour ASC`,
+      [sessionId, startDate, endDate]
+    );
+
+    // Calculate average response time per hour
+    const [responseTimeByHour] = await connection.query(
+      `SELECT
+        HOUR(a.timestamp) as hour,
+        AVG(TIMESTAMPDIFF(SECOND, q.timestamp, a.timestamp)) as avg_response_seconds
+      FROM messages a
+      JOIN messages q ON a.quoted_message_id = q.message_id
+      WHERE a.session_id = ?
+        AND a.direction = 'outgoing'
+        AND q.direction = 'incoming'
+        AND a.timestamp BETWEEN ? AND ?
+      GROUP BY HOUR(a.timestamp)`,
+      [sessionId, startDate, endDate]
+    );
+
+    // Merge response times into hourly data
+    const responseTimeMap = new Map(
+      responseTimeByHour.map(r => [r.hour, r.avg_response_seconds])
+    );
+
+    const enrichedHourlyData = hourlyData.map(h => ({
+      hour: h.hour,
+      totalMessages: h.total_messages || 0,
+      incoming: h.incoming_count || 0,
+      outgoing: h.outgoing_count || 0,
+      avgResponseTime: responseTimeMap.get(h.hour) || null
+    }));
+
+    // Find peak and quiet hours
+    const peakHour = hourlyData.length > 0
+      ? hourlyData.reduce((max, h) => h.total_messages > max.total_messages ? h : max, hourlyData[0])
+      : null;
+
+    const quietHour = hourlyData.length > 0
+      ? hourlyData.reduce((min, h) => h.total_messages < min.total_messages ? h : min, hourlyData[0])
+      : null;
+
+    res.json({
+      period,
+      hourlyData: enrichedHourlyData,
+      peakHour: peakHour ? {
+        hour: peakHour.hour,
+        volume: peakHour.total_messages,
+        avgResponseTime: responseTimeMap.get(peakHour.hour) || null
+      } : null,
+      quietHour: quietHour ? {
+        hour: quietHour.hour,
+        volume: quietHour.total_messages
+      } : null
+    });
+  } catch (error) {
+    console.error('Error calculating hourly performance:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to calculate hourly performance', details: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/cs/top-contacts
+ * CS Performance - Top active contacts
+ */
+router.get('/analytics/cs/top-contacts', async (req, res) => {
+  try {
+    const { sessionId, period = '7d', limit = 10 } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const connection = getPool();
+
+    // Calculate date range based on period
+    const startDate = new Date();
+    if (period === 'today') {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === '7d') {
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (period === '30d') {
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    const endDate = new Date();
+
+    // Get top contacts by message count
+    const [topContacts] = await connection.query(
+      `SELECT
+        c.id,
+        c.name,
+        c.phone,
+        COUNT(m.id) as message_count,
+        MAX(m.timestamp) as last_message_at,
+        SUM(CASE WHEN m.direction = 'incoming' THEN 1 ELSE 0 END) as incoming_count,
+        SUM(CASE WHEN m.direction = 'outgoing' THEN 1 ELSE 0 END) as outgoing_count
+      FROM contacts c
+      JOIN messages m ON c.id = m.contact_id
+      WHERE c.session_id = ?
+        AND m.timestamp BETWEEN ? AND ?
+      GROUP BY c.id
+      ORDER BY message_count DESC
+      LIMIT ?`,
+      [sessionId, startDate, endDate, parseInt(limit)]
+    );
+
+    // Format last message time
+    const formatLastMessage = (timestamp) => {
+      if (!timestamp) return null;
+      const now = new Date();
+      const diff = now - new Date(timestamp);
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+
+      if (minutes < 60) return `${minutes}m lalu`;
+      if (hours < 24) return `${hours}j lalu`;
+      return `${days}h lalu`;
+    };
+
+    res.json({
+      period,
+      contacts: topContacts.map(c => ({
+        id: c.id,
+        name: c.name || 'Unknown',
+        phone: c.phone,
+        messageCount: c.message_count || 0,
+        incomingCount: c.incoming_count || 0,
+        outgoingCount: c.outgoing_count || 0,
+        lastMessageAt: c.last_message_at,
+        lastMessageFormatted: formatLastMessage(c.last_message_at)
+      })),
+      totalAnalyzed: topContacts.length
+    });
+  } catch (error) {
+    console.error('Error fetching top contacts:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to fetch top contacts', details: error.message });
+  }
+});
+
 export default router;
