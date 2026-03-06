@@ -355,7 +355,7 @@ function broadcastStatus(sessionId) {
   io.emit("status", payload);
 }
 
-async function createSession(sessionId) {
+async function createSession(sessionId, { forceNew = false } = {}) {
   let session = sessions.get(sessionId);
   const isRestart = session && (session.isManualDisconnect || session.status.state === 'close');
 
@@ -368,9 +368,9 @@ async function createSession(sessionId) {
   if (!session) {
     fs.mkdirSync(authPath, { recursive: true });
 
-    // Try to restore session from cloud if local files don't exist
+    // Try to restore session from cloud if local files don't exist (skip if forceNew)
     const hasLocalCreds = fs.existsSync(path.join(authPath, 'creds.json'));
-    if (!hasLocalCreds) {
+    if (!hasLocalCreds && !forceNew) {
       try {
         console.log(`Attempting to restore session ${sessionId} from cloud...`);
         const cloudSession = await sessionStorage.loadSessionFromCloud(sessionId);
@@ -962,13 +962,13 @@ app.get("/sessions", authenticateToken, (req, res) => {
 });
 
 app.post("/sessions", authenticateToken, async (req, res) => {
-  const { id } = req.body;
+  const { id, forceNew } = req.body;
   const sessionId = String(id || "").trim();
   if (!sessionId) return res.status(400).json({ error: "Session id required" });
   if (sessions.has(sessionId)) return res.status(400).json({ error: "Session already exists" });
 
   try {
-    await createSession(sessionId);
+    await createSession(sessionId, { forceNew: forceNew === true });
     res.json({ status: "created", sessionId });
   } catch (err) {
     console.error("Create session failed", err);
@@ -1554,6 +1554,13 @@ app.delete("/sessions/:id", authenticateToken, async (req, res) => {
     sessions.delete(id);
     clearSessionJobs(id);
     resetAuthDir(id);
+
+    // Always delete session credentials from cloud to prevent unintended restore
+    try {
+      await sessionStorage.deleteSessionFromCloud(id);
+    } catch (cloudErr) {
+      console.warn(`Could not delete session from cloud storage: ${cloudErr.message}`);
+    }
 
     // Delete session data from database based on options
     try {

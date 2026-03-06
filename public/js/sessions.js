@@ -359,7 +359,7 @@ function initSessions() {
     }
     log.textContent = 'Creating session...';
     try {
-      await postJson('/sessions', { id: val });
+      await postJson('/sessions', { id: val, forceNew: true });
       log.textContent = `Session "${val}" created! Redirecting...`;
       setTimeout(() => {
         state.activeSession = val;

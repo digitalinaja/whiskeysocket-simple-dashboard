@@ -27,16 +27,38 @@ async function startWA({
     default: makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
+    Browsers,
+    fetchLatestBaileysVersion,
   } = await getBaileys();
   const { state, saveCreds } = await useMultiFileAuthState(authPath);
   let sock;
+  let reconnectAttempt = 0;
 
-  const startSock = () => {
+  const startSock = async () => {
     if (onStatusChange) onStatusChange({ state: "connecting", hasQR: false });
+
+    // Fetch latest WA Web version to avoid noise handshake rejection
+    let waVersion;
+    try {
+      const { version, isLatest } = await fetchLatestBaileysVersion();
+      waVersion = version;
+      console.log(`[${sessionId}] Using WA version ${version.join('.')} (isLatest: ${isLatest})`);
+    } catch (err) {
+      console.warn(`[${sessionId}] Could not fetch latest WA version, using fallback:`, err.message);
+      waVersion = [2, 3000, 1027934701];
+    }
 
     sock = makeWASocket({
       auth: state,
+      version: waVersion,
       printQRInTerminal: false,
+      browser: Browsers.ubuntu('Chrome'),
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 10000,
+      retryRequestDelayMs: 2000,
+      maxMsgRetryCount: 5,
+      defaultQueryTimeoutMs: 60000,
+      qrTimeout: 60000,
     });
 
     if (onSockUpdate) onSockUpdate(sock);
@@ -52,6 +74,7 @@ async function startWA({
       }
 
       if (connection === "open") {
+        reconnectAttempt = 0; // reset on successful connection
         io.emit("ready", { sessionId, message: "WhatsApp connected!" });
         if (onStatusChange) onStatusChange({ state: "open", hasQR: false });
       }
@@ -68,7 +91,11 @@ async function startWA({
         }
 
         if (doReconnect) {
-          setTimeout(startSock, 2000); // simple backoff before reconnect
+          reconnectAttempt++;
+          // Exponential backoff: 2s, 4s, 8s, … capped at 30s
+          const delay = Math.min(2000 * Math.pow(2, reconnectAttempt - 1), 30000);
+          console.log(`[${sessionId}] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})...`);
+          setTimeout(startSock, delay);
         }
       }
     });
