@@ -385,13 +385,28 @@ async function createSession(sessionId, { forceNew = false } = {}) {
             console.log(`✓ Restored credentials for ${sessionId} from cloud`);
           }
 
-          // Restore app state if exists
-          if (cloudSession.appState) {
+          // Restore all extra auth files (pre-keys, sender-keys, app-state, etc.)
+          if (cloudSession.extraFiles && typeof cloudSession.extraFiles === 'object') {
+            for (const [filename, content] of Object.entries(cloudSession.extraFiles)) {
+              try {
+                fs.writeFileSync(
+                  path.join(authPath, filename),
+                  JSON.stringify(content, null, 2)
+                );
+              } catch (err) {
+                console.warn(`Could not restore auth file ${filename}:`, err.message);
+              }
+            }
+            const count = Object.keys(cloudSession.extraFiles).length;
+            if (count > 0) console.log(`✓ Restored ${count} extra auth file(s) for ${sessionId}`);
+          }
+
+          // Legacy: restore appState field from older sync format
+          if (!cloudSession.extraFiles && cloudSession.appState) {
             fs.writeFileSync(
               path.join(authPath, 'app-state-sync-key-undefined.json'),
               JSON.stringify(cloudSession.appState, null, 2)
             );
-            console.log(`✓ Restored app state for ${sessionId} from cloud`);
           }
         }
       } catch (err) {
@@ -520,12 +535,26 @@ async function loadExistingSessions() {
     fs.mkdirSync(AUTH_ROOT, { recursive: true });
   }
   const entries = fs.readdirSync(AUTH_ROOT, { withFileTypes: true });
-  const sessionIds = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  const localIds = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name));
 
-  // Only load sessions that already exist (no auto-creation)
-  for (const id of sessionIds) {
+  // Also collect session IDs stored in cloud (whatsapp_sessions table)
+  let cloudIds = [];
+  try {
+    const cloudSessions = await sessionStorage.listSessionsFromCloud();
+    cloudIds = cloudSessions.map((r) => r.session_id).filter((id) => !localIds.has(id));
+    if (cloudIds.length > 0) {
+      console.log(`Found ${cloudIds.length} session(s) in cloud not present locally: ${cloudIds.join(', ')}`);
+    }
+  } catch (err) {
+    console.warn('Could not list cloud sessions on startup (DB may not be ready yet):', err.message);
+  }
+
+  const allIds = [...localIds, ...cloudIds];
+
+  for (const id of allIds) {
     try {
-      await createSession(id);
+      // forceNew = false so cloud restore runs for sessions missing locally
+      await createSession(id, { forceNew: false });
     } catch (err) {
       console.error(`Failed to load session ${id}`, err);
     }

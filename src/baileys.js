@@ -104,35 +104,44 @@ async function startWA({
       // Save locally first
       await saveCreds();
 
-      // Then sync to cloud
+      // Then sync essential auth files to cloud (creds + pre-keys only, NOT sender-keys/sessions)
+      // sender-key-* and session-* files are rebuilt automatically by Baileys on reconnect
+      // and can number in the thousands, making full sync impractical
       try {
-        // Read the latest session files from disk
         const credsPath = path.join(authPath, 'creds.json');
-        const appStatePath = path.join(authPath, 'app-state-sync-key-undefined.json');
+        if (!fs.existsSync(credsPath)) return;
 
-        if (fs.existsSync(credsPath)) {
-          const sessionData = {
-            creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
-            timestamp: Date.now()
-          };
+        const sessionData = {
+          creds: JSON.parse(fs.readFileSync(credsPath, 'utf8')),
+          timestamp: Date.now(),
+          extraFiles: {},
+        };
 
-          // Try to read app state if exists
-          if (fs.existsSync(appStatePath)) {
-            try {
-              sessionData.appState = JSON.parse(fs.readFileSync(appStatePath, 'utf8'));
-            } catch (err) {
-              console.warn('Could not read app state:', err.message);
-            }
-          }
+        // Only sync pre-key and app-state files (small, essential for reconnect without QR)
+        // Skip: sender-key-*, session-* (too many, rebuilt automatically)
+        const essentialPrefixes = ['pre-key-', 'app-state-sync-key-', 'app-state-sync-version-'];
+        const authFiles = fs.readdirSync(authPath).filter((f) => {
+          if (!f.endsWith('.json') || f === 'creds.json') return false;
+          return essentialPrefixes.some((prefix) => f.startsWith(prefix));
+        });
 
-          // Save to cloud with error handling
+        for (const filename of authFiles) {
           try {
-            await sessionStorage.saveSessionToCloud(sessionId, sessionData);
-            console.log(`☁️ Session ${sessionId} synced to cloud`);
-          } catch (cloudErr) {
-            // Log error but don't crash - local session still works
-            console.error(`⚠️ Failed to sync session ${sessionId} to cloud:`, cloudErr.message);
+            sessionData.extraFiles[filename] = JSON.parse(
+              fs.readFileSync(path.join(authPath, filename), 'utf8')
+            );
+          } catch (err) {
+            console.warn(`Could not read auth file ${filename}:`, err.message);
           }
+        }
+
+        // Save to cloud with error handling
+        try {
+          await sessionStorage.saveSessionToCloud(sessionId, sessionData);
+          console.log(`☁️ Session ${sessionId} synced to cloud (creds + ${authFiles.length} pre-key/app-state files)`);
+        } catch (cloudErr) {
+          // Log error but don't crash - local session still works
+          console.error(`⚠️ Failed to sync session ${sessionId} to cloud:`, cloudErr.message);
         }
       } catch (err) {
         console.error('Error during cloud sync:', err);
